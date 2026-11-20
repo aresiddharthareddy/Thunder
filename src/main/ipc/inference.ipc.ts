@@ -22,8 +22,8 @@ export function registerInferenceIpc(): void {
     return chooseModel(payload.input, hardware.tier, available, payload.mode);
   });
   ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
-  ipcMain.handle(CH.INFER_STREAM_START, (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
-    const mode = route(payload.input, 2, payload.mode);
+  ipcMain.handle(CH.INFER_STREAM_START, async (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
+    const mode = route(payload.input, (await detectHardware()).tier, payload.mode);
     const systemPrompt = mode === "agent" ? AGENT_SYSTEM_PROMPT : mode === "plan" ? PLAN_SYSTEM_PROMPT : ASK_SYSTEM_PROMPT;
     const streamKey = crypto.randomUUID(); const sender = event.sender;
     const emitEnd = (result: CompletionResult, error?: string) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_END, { streamKey, result, error }); active.delete(streamKey); };
