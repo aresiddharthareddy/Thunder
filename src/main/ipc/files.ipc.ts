@@ -8,6 +8,8 @@ function assertAllowed(targetPath: string, intent: "read" | "write", workspaceRo
   const decision = classifyPath(targetPath, intent, { workspaceRoot });
   if (decision.action !== "allow") throw new Error(`File ${intent} blocked: ${decision.reason}`);
 }
+const MAX_READ_BYTES = 2 * 1024 * 1024;
+const MAX_WRITE_BYTES = 10 * 1024 * 1024;
 
 export function registerFilesIpc(): void {
   ipcMain.handle(CH.FILE_OPEN_WORKSPACE, async () => { const result = await dialog.showOpenDialog({ properties: ["openDirectory"] }); if (result.canceled || result.filePaths.length === 0) return null; const workspaceRoot = path.resolve(result.filePaths[0]); const files: string[] = []; const ignored = new Set([".git", "node_modules", "dist", "release", ".thunder", ".thunder-build"]); async function visit(directory: string): Promise<void> { if (files.length >= 2000) return; for (const entry of await fs.readdir(directory, { withFileTypes: true })) { if (ignored.has(entry.name) || entry.name.startsWith(".")) continue; const full = path.join(directory, entry.name); if (entry.isDirectory()) await visit(full); else if (entry.isFile() && classifyPath(full, "read", { workspaceRoot }).action === "allow") files.push(path.relative(workspaceRoot, full)); } } await visit(workspaceRoot); return { workspaceRoot, files: files.sort() }; });
@@ -17,8 +19,8 @@ export function registerFilesIpc(): void {
     const filePath = result.filePaths[0]; const workspaceRoot = path.dirname(filePath); assertAllowed(filePath, "read", workspaceRoot);
     return { filePath, workspaceRoot, content: await fs.readFile(filePath, "utf8") };
   });
-  ipcMain.handle(CH.FILE_READ, async (_event, payload: { filePath: string; workspaceRoot: string }) => { assertAllowed(payload.filePath, "read", payload.workspaceRoot); return fs.readFile(payload.filePath, "utf8"); });
-  ipcMain.handle(CH.FILE_WRITE, async (_event, payload: { filePath: string; workspaceRoot: string; content: string }) => { assertAllowed(payload.filePath, "write", payload.workspaceRoot); await fs.writeFile(payload.filePath, payload.content, "utf8"); return { ok: true }; });
+  ipcMain.handle(CH.FILE_READ, async (_event, payload: { filePath: string; workspaceRoot: string }) => { assertAllowed(payload.filePath, "read", payload.workspaceRoot); const stat = await fs.stat(payload.filePath); if (stat.size > MAX_READ_BYTES) throw new Error(`File read exceeds ${MAX_READ_BYTES} bytes`); return fs.readFile(payload.filePath, "utf8"); });
+  ipcMain.handle(CH.FILE_WRITE, async (_event, payload: { filePath: string; workspaceRoot: string; content: string }) => { assertAllowed(payload.filePath, "write", payload.workspaceRoot); if (Buffer.byteLength(payload.content, "utf8") > MAX_WRITE_BYTES) throw new Error(`File write exceeds ${MAX_WRITE_BYTES} bytes`); await fs.writeFile(payload.filePath, payload.content, "utf8"); return { ok: true }; });
   ipcMain.handle(CH.FILE_TREE, async (_event, payload: { workspaceRoot: string }) => {
     const root = path.resolve(payload.workspaceRoot); const output: string[] = []; const ignored = new Set([".git", "node_modules", "dist", "release", ".thunder", ".thunder-build"]);
     async function visit(directory: string): Promise<void> { if (output.length >= 2000) return; for (const entry of await fs.readdir(directory, { withFileTypes: true })) { if (ignored.has(entry.name) || entry.name.startsWith(".")) continue; const full = path.join(directory, entry.name); if (entry.isDirectory()) await visit(full); else if (entry.isFile()) { const relative = path.relative(root, full); if (classifyPath(full, "read", { workspaceRoot: root }).action === "allow") output.push(relative); } } }
