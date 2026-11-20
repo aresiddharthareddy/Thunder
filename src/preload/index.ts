@@ -64,6 +64,7 @@ const api = {
     classifyPath: (payload: { targetPath: string; intent: "read" | "write"; workspaceRoot: string }) => ipcRenderer.invoke(CH.SECURITY_CLASSIFY_PATH, payload),
     redactSecrets: (text: string) => ipcRenderer.invoke(CH.SECURITY_REDACT, text),
     rulesetHash: (): Promise<string> => ipcRenderer.invoke(CH.SECURITY_HASH) as Promise<string>,
+    zeroOutbound: { get: (): Promise<boolean> => ipcRenderer.invoke(CH.SECURITY_ZERO_OUTBOUND_GET) as Promise<boolean>, set: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke(CH.SECURITY_ZERO_OUTBOUND_SET, enabled) as Promise<boolean> },
   },
   files: {
     open: (): Promise<{ filePath: string; workspaceRoot: string; content: string } | null> => ipcRenderer.invoke(CH.FILE_OPEN) as Promise<{ filePath: string; workspaceRoot: string; content: string } | null>,

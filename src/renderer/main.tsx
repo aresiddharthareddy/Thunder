@@ -54,6 +54,7 @@ function App(): JSX.Element {
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
   const [workspace, setWorkspace] = useState(false);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
+  const [zeroOutbound, setZeroOutbound] = useState(false);
 
   useEffect(() => {
     if (!window.thunder) {
@@ -65,6 +66,7 @@ function App(): JSX.Element {
     });
     void window.thunder.catalog.list().then(setModels).catch(() => undefined);
     void window.thunder.entitlement.get().then(setEntitlement).catch(() => setEntitlement(null));
+    void window.thunder.security.zeroOutbound.get().then(setZeroOutbound).catch(() => undefined);
     return window.thunder.catalog.onProgress((update) => setProgress((current) => ({ ...current, [update.modelId]: update })));
   }, []);
 
@@ -103,6 +105,7 @@ function App(): JSX.Element {
         {error && <div className="error">{error}</div>}
         {!hardware && !error && <section className="card scanning">Scanning hardware<span className="pulse">…</span></section>}
         {hardware && <HardwareCard hardware={hardware} />}
+        <section className="card privacy-card"><div><p className="eyebrow">PRIVACY</p><h2>Zero Outbound Mode</h2><p className="reason">Block catalog refreshes and all model downloads. Inference and project data remain local.</p></div><label className="toggle"><input type="checkbox" checked={zeroOutbound} onChange={(event) => { setZeroOutbound(event.target.checked); void window.thunder.security.zeroOutbound.set(event.target.checked); }} /><span>{zeroOutbound ? "Enabled" : "Disabled"}</span></label></section>
         <ProPreview entitlement={entitlement} />
         <section className="card model-card">
           <div className="card-heading"><div><p className="eyebrow">M2 · LOCAL MODELS</p><h2>Model catalog</h2></div><span className="model-count">{models.length} available</span></div>

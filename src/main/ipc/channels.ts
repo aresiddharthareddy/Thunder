@@ -34,4 +34,6 @@ export const CH = {
   SECURITY_CLASSIFY_PATH: "security:classifyPath",
   SECURITY_REDACT: "security:redact",
   SECURITY_HASH: "security:hash",
+  SECURITY_ZERO_OUTBOUND_GET: "security:zeroOutbound:get",
+  SECURITY_ZERO_OUTBOUND_SET: "security:zeroOutbound:set",
 } as const;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import { classifyPath, redactSecrets, requiresTerminalApproval } from "../../src/core/security.js";
+import { assertNoOutbound, classifyPath, redactSecrets, requiresTerminalApproval, setZeroOutbound } from "../../src/core/security.js";
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "thunder-security-"));
 describe("security policy", () => {
@@ -21,4 +21,10 @@ describe("security policy", () => {
     expect(result.text).not.toContain("AKIA");
   });
   it("requires approval for every terminal command in v1", () => { expect(requiresTerminalApproval("echo hello")).toBe(true); });
+  it("blocks outbound operations only when enabled", () => {
+    setZeroOutbound(true);
+    expect(() => assertNoOutbound("test")).toThrow(/Outbound network blocked/);
+    setZeroOutbound(false);
+    expect(() => assertNoOutbound("test")).not.toThrow();
+  });
 });

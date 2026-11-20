@@ -1,4 +1,5 @@
 import { ipcMain } from "electron";
 import { CH } from "./channels.js";
-import { classifyPath, redactSecrets, securityRulesetHash } from "../../core/security.js";
-export function registerSecurityIpc(): void { ipcMain.handle(CH.SECURITY_CLASSIFY_PATH, (_event, payload: { targetPath: string; intent: "read" | "write"; workspaceRoot: string }) => classifyPath(payload.targetPath, payload.intent, { workspaceRoot: payload.workspaceRoot })); ipcMain.handle(CH.SECURITY_REDACT, (_event, text: string) => redactSecrets(text)); ipcMain.handle(CH.SECURITY_HASH, () => securityRulesetHash()); }
+import { classifyPath, redactSecrets, securityRulesetHash, isZeroOutbound, setZeroOutbound } from "../../core/security.js";
+import { db } from "../db/index.js";
+export function registerSecurityIpc(): void { ipcMain.handle(CH.SECURITY_CLASSIFY_PATH, (_event, payload: { targetPath: string; intent: "read" | "write"; workspaceRoot: string }) => classifyPath(payload.targetPath, payload.intent, { workspaceRoot: payload.workspaceRoot })); ipcMain.handle(CH.SECURITY_REDACT, (_event, text: string) => redactSecrets(text)); ipcMain.handle(CH.SECURITY_HASH, () => securityRulesetHash()); ipcMain.handle(CH.SECURITY_ZERO_OUTBOUND_GET, () => isZeroOutbound()); ipcMain.handle(CH.SECURITY_ZERO_OUTBOUND_SET, (_event, enabled: boolean) => { if (typeof enabled !== "boolean") throw new Error("Zero Outbound value must be boolean"); setZeroOutbound(enabled); db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)").run("zero_outbound", String(enabled)); return enabled; }); }
