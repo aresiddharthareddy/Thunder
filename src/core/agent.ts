@@ -47,6 +47,8 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
   const started = Date.now();
   const steps: AgentStep[] = [];
   const changed = new Set<string>();
+  const originals = new Map<string, string>();
+  const rollback = async (): Promise<void> => { await Promise.all([...originals.entries()].map(async ([file, content]) => fs.writeFile(file, content))); };
   const finish = (index: number, kind: AgentStepKind, payload: unknown, status: AgentStepStatus, stepStarted: number, error?: string) => {
     const step: AgentStep = { index, kind, payload: error ? { payload, error } : payload, startedAt: stepStarted, endedAt: Date.now(), phase: kind === "plan" ? "planning" : kind === "finish" ? "validation" : "edit-gen", tokensIn: 0, tokensOut: 0, status };
     steps.push(step); onStep?.(step);
@@ -54,7 +56,7 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
   try {
     if (plan.length > policy.maxSteps) throw new Error(`Agent plan exceeds ${policy.maxSteps} steps`);
     for (let index = 0; index < plan.length; index += 1) {
-      if (signal?.aborted) return { taskId, status: "aborted", steps, changedFiles: [...changed] };
+      if (signal?.aborted) { await rollback(); return { taskId, status: "aborted", steps, changedFiles: [] }; }
       if (Date.now() - started > policy.timeoutMs) throw new Error("Agent timeout exceeded");
       const item = plan[index]; const stepStarted = Date.now();
       if (item.kind === "read") {
@@ -66,6 +68,7 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
         const block = item.payload as SearchReplaceBlock;
         if (changed.size >= policy.maxFiles && !changed.has(block.file)) throw new Error(`Agent file budget exceeded: ${policy.maxFiles}`);
         const file = safePath(policy.workspaceRoot, block.file); const content = await fs.readFile(file, "utf8");
+        if (!originals.has(file)) originals.set(file, content);
         await fs.writeFile(file, applyBlock(content, block)); changed.add(block.file); finish(index, item.kind, block, "ok", stepStarted); continue;
       }
       if (item.kind === "plan" || item.kind === "finish") { finish(index, item.kind, item.payload, "ok", stepStarted); continue; }
@@ -74,7 +77,8 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
     return { taskId, status: "completed", steps, changedFiles: [...changed] };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    await rollback();
     const last = plan[steps.length]; if (last) finish(steps.length, last.kind, last.payload, signal?.aborted ? "aborted" : "failed", Date.now(), message);
-    return { taskId, status: signal?.aborted ? "aborted" : "failed", steps, changedFiles: [...changed], error: message };
+    return { taskId, status: signal?.aborted ? "aborted" : "failed", steps, changedFiles: [], error: message };
   }
 }

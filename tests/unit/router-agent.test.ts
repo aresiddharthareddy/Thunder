@@ -36,4 +36,13 @@ describe("agent execution", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("escapes workspace");
   });
+
+  it("rolls back earlier edits when a later step fails", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    const file = path.join(root, "demo.ts");
+    await fs.writeFile(file, "const answer = 1;\n");
+    const result = await runAgent([{ kind: "search_replace", payload: { file: "demo.ts", search: "const answer = 1;", replace: "const answer = 42;" } }, { kind: "search_replace", payload: { file: "demo.ts", search: "missing", replace: "bad" } }], { workspaceRoot: root, maxSteps: 3, maxFiles: 1, timeoutMs: 1000, allowWrites: true });
+    expect(result.status).toBe("failed");
+    expect(await fs.readFile(file, "utf8")).toBe("const answer = 1;\n");
+  });
 });
