@@ -60,6 +60,15 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
     status: r.status as AgentStep["status"],
   }));
 
+  const entitlementRow = db.prepare("SELECT value FROM kv WHERE key = ?").get("entitlement") as { value: string } | undefined;
+  let entitlement = freeEntitlement();
+  if (entitlementRow) {
+    try {
+      const stored = JSON.parse(entitlementRow.value) as DiagnosticReport["entitlement"];
+      if (stored.tier === "pro" && (stored.expiresAt === null || stored.expiresAt > Date.now())) entitlement = stored;
+    } catch { entitlement = freeEntitlement(); }
+  }
+
   return {
     generatedAt: Date.now(),
     appVersion: app.getVersion(),
@@ -69,7 +78,7 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
     hardware,
     cachedModels,
     activeModelId: null,
-    entitlement: freeEntitlement(),
+    entitlement,
     securityRulesetHash: securityRulesetHash(),
     freeDiskBytes: hardware.freeDiskBytes,
     recentLogLines: [],
