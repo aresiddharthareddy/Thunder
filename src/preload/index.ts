@@ -36,6 +36,7 @@ const api = {
     },
   },
   inference: {
+    route: (payload: { input: string; mode?: Mode }): Promise<{ mode: Mode; modelId: string | null; reason: string; confidence: number }> => ipcRenderer.invoke(CH.INFER_ROUTE, payload) as Promise<{ mode: Mode; modelId: string | null; reason: string; confidence: number }>,
     load: (modelId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.INFER_LOAD, modelId) as Promise<{ ok: boolean }>,
     streamStart: (payload: { input: string; modelId: string; mode?: Mode; context?: string }): Promise<{ streamKey: string }> => ipcRenderer.invoke(CH.INFER_STREAM_START, payload) as Promise<{ streamKey: string }>,
     streamCancel: (streamKey: string): Promise<{ aborted: boolean }> => ipcRenderer.invoke(CH.INFER_STREAM_CANCEL, streamKey) as Promise<{ aborted: boolean }>,

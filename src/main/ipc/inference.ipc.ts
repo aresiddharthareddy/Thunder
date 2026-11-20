@@ -4,11 +4,18 @@ import { CH } from "./channels.js";
 import { startStream, loadModel, type StreamHandle } from "../../core/inference.js";
 import { AGENT_SYSTEM_PROMPT, ASK_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT } from "../../core/prompts.js";
 import { route } from "../../core/router.js";
+import { chooseModel } from "../../core/router.js";
+import { detectHardware } from "../../core/hardware.js";
+import { readBundledCatalog } from "../../core/catalog.js";
 import type { CompletionResult } from "../../core/inference.js";
 import { runAgent } from "../../core/agent.js";
 import { classifyPath } from "../../core/security.js";
 const active = new Map<string, StreamHandle>();
 export function registerInferenceIpc(): void {
+  ipcMain.handle(CH.INFER_ROUTE, async (_event, payload: { input: string; mode?: "ask" | "plan" | "agent" }) => {
+    const hardware = await detectHardware();
+    return chooseModel(payload.input, hardware.tier, readBundledCatalog().models, payload.mode);
+  });
   ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
   ipcMain.handle(CH.INFER_STREAM_START, (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
     const mode = route(payload.input, 2, payload.mode);

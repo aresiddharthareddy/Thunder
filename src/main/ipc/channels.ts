@@ -11,6 +11,7 @@ export const CH = {
   INFER_STREAM_TOKEN: "infer:stream:token",
   INFER_STREAM_END: "infer:stream:end",
   INFER_STREAM_CANCEL: "infer:stream:cancel",
+  INFER_ROUTE: "infer:route",
   AGENT_RUN: "agent:run",
   FILE_TREE: "file:tree",
   FILE_READ: "file:read",
