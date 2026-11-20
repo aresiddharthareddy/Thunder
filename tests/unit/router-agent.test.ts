@@ -53,4 +53,14 @@ describe("agent execution", () => {
     expect(result.status).toBe("failed");
     expect(await fs.readFile(file, "utf8")).toBe("const answer = 1;\n");
   });
+
+  it("emits step records without requiring file content persistence", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    await fs.writeFile(path.join(root, "a.txt"), "secret-looking content");
+    const steps: AgentStep[] = [];
+    const result = await runAgent([{ kind: "read", payload: { file: "a.txt" } }], { workspaceRoot: root, maxSteps: 2, maxFiles: 1, timeoutMs: 1000, allowWrites: false }, undefined, (step) => steps.push(step));
+    expect(result.status).toBe("completed");
+    expect(steps).toHaveLength(1);
+    expect(JSON.stringify(steps[0].payload)).toContain("secret-looking content");
+  });
 });

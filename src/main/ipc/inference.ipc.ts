@@ -41,7 +41,18 @@ export function registerInferenceIpc(): void {
       const decision = classifyPath(file, "write", { workspaceRoot: payload.workspaceRoot });
       if (decision.action !== "allow") throw new Error(`Agent write blocked: ${decision.reason}`);
     }
-    const result = await runAgent(payload.plan, { workspaceRoot: payload.workspaceRoot, maxSteps: Math.max(8, capabilities.maxFilesPerAgentRun * 4), maxFiles: capabilities.maxFilesPerAgentRun, timeoutMs: capabilities.agentStepTimeoutMs, allowWrites: payload.allowWrites });
+    const persistedSteps: import("../../shared/types.js").AgentStep[] = [];
+    const result = await runAgent(
+      payload.plan,
+      { workspaceRoot: payload.workspaceRoot, maxSteps: Math.max(8, capabilities.maxFilesPerAgentRun * 4), maxFiles: capabilities.maxFilesPerAgentRun, timeoutMs: capabilities.agentStepTimeoutMs, allowWrites: payload.allowWrites },
+      undefined,
+      (step) => { persistedSteps.push(step); },
+    );
+    for (const step of persistedSteps) {
+      const payloadValue = step.payload && typeof step.payload === "object" ? step.payload as Record<string, unknown> : {};
+      const safePayload = { kind: step.kind, file: typeof payloadValue.file === "string" ? payloadValue.file : undefined, error: typeof payloadValue.error === "string" ? payloadValue.error : undefined };
+      db.prepare("INSERT INTO agent_steps (task_id, step_index, kind, payload_json, phase, started_at, ended_at, tokens_in, tokens_out, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(result.taskId, step.index, step.kind, JSON.stringify(safePayload), step.phase, step.startedAt, step.endedAt, step.tokensIn, step.tokensOut, step.status);
+    }
     db.prepare("INSERT INTO audit_log (ts, event, detail_json) VALUES (?, ?, ?)").run(Date.now(), "agent.run", JSON.stringify({ taskId: result.taskId, status: result.status, changedFiles: result.changedFiles, error: result.error ?? null }));
     return result;
   });
