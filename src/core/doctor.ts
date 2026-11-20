@@ -3,7 +3,7 @@ import { db } from "../main/db/index.js";
 import { detectHardware } from "./hardware.js";
 import type { DiagnosticReport, CachedModelInfo } from "../shared/diagnostics.js";
 import type { AgentStep } from "../shared/types.js";
-import { freeEntitlement } from "./entitlements.js";
+import { readEntitlement } from "../main/entitlement.js";
 import { securityRulesetHash } from "./security.js";
 
 export async function collectDiagnostics(): Promise<DiagnosticReport> {
@@ -60,14 +60,6 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
     status: r.status as AgentStep["status"],
   }));
 
-  const entitlementRow = db.prepare("SELECT value FROM kv WHERE key = ?").get("entitlement") as { value: string } | undefined;
-  let entitlement = freeEntitlement();
-  if (entitlementRow) {
-    try {
-      const stored = JSON.parse(entitlementRow.value) as DiagnosticReport["entitlement"];
-      if (stored.tier === "pro" && (stored.expiresAt === null || stored.expiresAt > Date.now())) entitlement = stored;
-    } catch { entitlement = freeEntitlement(); }
-  }
   const recentLogLines = (db.prepare("SELECT event, detail_json FROM audit_log ORDER BY ts DESC LIMIT 200").all() as Array<{ event: string; detail_json: string }>).map((row) => `${row.event} ${row.detail_json}`);
 
   return {
@@ -79,7 +71,7 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
     hardware,
     cachedModels,
     activeModelId: null,
-    entitlement,
+    entitlement: readEntitlement(),
     securityRulesetHash: securityRulesetHash(),
     freeDiskBytes: hardware.freeDiskBytes,
     recentLogLines,

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { verifyFile } from '../ide/extension/models.mjs';
 import { prepareCpuRuntime } from './build-cpu-runtime.mjs';
+import { parseLicenseIssuer } from '../ide/extension/license.cjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const build=path.join(root,'.thunder-build');
@@ -29,8 +30,12 @@ try {
   await fs.mkdir(app,{recursive:true});
   execFileSync('rsync',['-a',`${base}/`,`${app}/`]);
   await fs.mkdir(ext,{recursive:true});
-  for(const name of ['package.json','extension.cjs','panel.cjs','context.cjs','services.cjs','changes.cjs','auto.cjs','models.mjs','engine.mjs','cpu.mjs','bolt.svg','node_modules'])
+  for(const name of ['package.json','extension.cjs','panel.cjs','context.cjs','services.cjs','license.cjs','changes.cjs','auto.cjs','models.mjs','engine.mjs','cpu.mjs','bolt.svg','node_modules'])
     await fs.cp(path.join(src,name),path.join(ext,name),{recursive:true,verbatimSymlinks:true});
+  if (process.env.THUNDER_LICENSE_PUBLIC_KEY_FILE) {
+    const issuer = parseLicenseIssuer(await fs.readFile(process.env.THUNDER_LICENSE_PUBLIC_KEY_FILE, 'utf8'));
+    await fs.writeFile(path.join(ext, 'license-public.pem'), issuer.export({type:'spki',format:'pem'}));
+  }
   await prepareCpuRuntime(root,path.join(ext,'runtime'));
   await fs.copyFile(path.join(root,'resources/models.json'),path.join(ext,'catalog.json'));
   await fs.mkdir(path.join(ext,'models'));

@@ -3,7 +3,7 @@
   "displayName": "Thunder",
   "description": "Ask about a project, plan changes and review local AI edits.",
   "publisher": "thunder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "engines": { "vscode": "^1.100.0" },
   "main": "./extension.cjs",
   "activationEvents": ["onStartupFinished"],
@@ -16,7 +16,7 @@
       { "command": "thunder.open", "title": "Thunder: Open Assistant" },
       { "command": "thunder.models", "title": "Thunder: Manage Local Models" },
       { "command": "thunder.doctor", "title": "Thunder: Export Diagnostics" },
-      { "command": "thunder.account", "title": "Thunder: Switch Account" }
+      { "command": "thunder.account", "title": "Thunder: Manage Account and License" }
     ],
     "configurationDefaults": {
       "chat.disableAIFeatures": true,

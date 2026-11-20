@@ -38,6 +38,10 @@ The first Workbench build needs CMake and Apple Command Line Tools to compile th
 
 Run `npm run package:workbench` to create a macOS ZIP and SHA-256 checksum without the demo account verification key. The bundle is ad-hoc signed for local testing. Public macOS distribution requires Developer ID signing and notarization.
 
+In Workbench, open **Manage Account and License** to activate an offline Pro license. Release builders can set `THUNDER_LICENSE_PUBLIC_KEY_FILE` to the issuer's Ed25519 public PEM before packaging. The issuer can run `node scripts/issue-license.mjs EMAIL PLAN EXPIRY_ISO` with `THUNDER_LICENSE_SIGNING_KEY_FILE` set on a signing machine. Keep the private key out of builds and version control. Demo accounts use a separate verification key, and the Free demo account stays Free even if the profile has a valid Pro license.
+
+Existing standalone-app licenses need to be entered again once. The previous version kept a derived tier flag, and the current version verifies the original signed license on use.
+
 Launch the prepared macOS demo with `pnpm demo`.
 
 ## Privacy

@@ -6,6 +6,7 @@ const required = [
   "Contents/MacOS/VSCodium",
   "Contents/Resources/app/extensions/thunder-local/extension.cjs",
   "Contents/Resources/app/extensions/thunder-local/panel.cjs",
+  "Contents/Resources/app/extensions/thunder-local/license.cjs",
   "Contents/Resources/app/extensions/thunder-local/runtime/llama-completion",
   "Contents/Resources/app/extensions/thunder-local/runtime/LLAMA-LICENSE",
   "Contents/Resources/app/extensions/thunder-local/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",

@@ -12,16 +12,13 @@ const { panel } = require('./panel.cjs');
 class Assistant {
   constructor(ctx) {
     this.ctx=ctx;
-    this.services=new Services(ctx);
+    this.services=new Services(ctx,()=>this.status());
     this.previews=new Map();
-    this.history=[];
   }
   historyKey() {
     const root=vscode.workspace.workspaceFolders?.[0]?.uri.fsPath||'no-workspace';
-    return 'memory:'+createHash('sha256').update(root).digest('hex').slice(0,24);
+    return 'memory:'+createHash('sha256').update(root+'\0'+this.services.profileScope).digest('hex').slice(0,24);
   }
-  restoreHistory() { this.history=this.ctx.globalState.get(this.historyKey(),[]).slice(-4); }
-  async saveHistory() { await this.ctx.globalState.update(this.historyKey(),this.history.slice(-4)); }
   post(message) { return this.view?.webview.postMessage(message); }
   status() {
     const s=this.services;
@@ -48,8 +45,8 @@ class Assistant {
           case 'review': await this.preview(m.file); break;
           case 'apply': await this.apply(); break;
           case 'reject': this.clearReview(); break;
-          case 'account': await this.services.account(); this.history=[]; this.clearReview(); this.post({type:'clear'}); break;
-          case 'memory': this.history=[]; await this.saveHistory(); this.post({type:'clear'}); this.notice('Local context memory cleared.'); break;
+          case 'account': if(await this.services.account()){this.clearReview();this.post({type:'clear'});} break;
+          case 'memory': await this.ctx.globalState.update(this.historyKey(),[]); this.post({type:'clear'}); this.notice('Local context memory cleared.'); break;
           case 'lab': await this.services.lab(); break;
           case 'folder': await this.services.folder(); break;
           case 'tuning': await this.services.tune(); break;
@@ -85,6 +82,8 @@ class Assistant {
     const s=this.services;
     const deadline=mode==='cloud'?null:AbortSignal.timeout(s.hw.tier===1?60_000:120_000);
     const signal=deadline?AbortSignal.any([controller.signal,deadline]):controller.signal;
+    const memoryKey=this.historyKey();
+    const history=this.ctx.globalState.get(memoryKey,[]).slice(-4);
     this.post({type:'start',text}); this.status();
     let answer='';
     try {
@@ -102,7 +101,7 @@ class Assistant {
           mode,input:text,pin:s.pro && s.state.get('pins',{})[mode],sourceCount:sources.size
         });
         this.engine ??= new (await import('./engine.mjs')).LocalEngine();
-        const previous=this.history.slice(-4).join('\n').slice(-750);
+        const previous=history.join('\n').slice(-750);
         let notes=previous;
         let phases=0;
         const infer=async (model,phase,input,maxTokens,{onText,runSignal=signal}={})=>{
@@ -149,7 +148,7 @@ class Assistant {
         } else answer=await infer(route.primary,mode,text,route.maxTokens,{onText:chunk=>this.post({type:'token',text:chunk})});
         await s.audit('inference',{mode,phases,files:sources.size});
       }
-      this.history.push(redact(text),redact(answer)); this.history=this.history.slice(-4); await this.saveHistory();
+      await this.ctx.globalState.update(memoryKey,[...history,redact(text),redact(answer)].slice(-4));
       this.post({type:'end',text:answer});
     } catch(e) {
       const response=controller.signal.aborted?'Cancelled.':deadline?.aborted||e.name==='TimeoutError'
@@ -194,7 +193,6 @@ class Assistant {
 let assistant;
 async function activate(ctx) {
   assistant=new Assistant(ctx);
-  assistant.restoreHistory();
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider('thunder.assistant',assistant,{webviewOptions:{retainContextWhenHidden:true}}),
     vscode.workspace.registerTextDocumentContentProvider('thunder-preview',{provideTextDocumentContent:uri=>assistant.previews.get(uri.toString())??''}),
     vscode.workspace.onDidChangeConfiguration(e=>{if(e.affectsConfiguration('thunder.zeroOutbound') && assistant.services.offline){assistant.services.download?.abort();assistant.run?.abort();}assistant.status();}));
@@ -210,5 +208,5 @@ async function activate(ctx) {
     if(!assistant.services.offline && pack.some(m=>!m.location)) void assistant.services.hydrate().catch(e=>assistant.notice(e.message));
   }
 }
-async function deactivate(){ assistant?.run?.abort(); assistant?.services.download?.abort(); await assistant?.engine?.dispose(); }
+async function deactivate(){ assistant?.run?.abort(); assistant?.services.dispose(); await assistant?.engine?.dispose(); }
 module.exports={activate,deactivate,Assistant};

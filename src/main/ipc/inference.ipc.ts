@@ -13,6 +13,7 @@ import type { CompletionResult } from "../../core/inference.js";
 import { runAgent } from "../../core/agent.js";
 import { classifyPath, redactSecrets } from "../../core/security.js";
 import { db } from "../db/index.js";
+import { readEntitlement } from "../entitlement.js";
 const active = new Map<string, StreamHandle>();
 const modes = new Set(["ask", "plan", "agent"]);
 const FREE_MODEL_MAX_BYTES = 2_000_000_000;
@@ -22,11 +23,7 @@ function requireMode(mode: unknown): "ask" | "plan" | "agent" | undefined {
   return mode as "ask" | "plan" | "agent";
 }
 function hasProEntitlement(): boolean {
-  const row = db.prepare("SELECT value FROM kv WHERE key = ?").get("entitlement") as { value: string } | undefined;
-  try {
-    const entitlement = row ? JSON.parse(row.value) as { tier?: string; expiresAt?: number | null } : null;
-    return entitlement?.tier === "pro" && (entitlement.expiresAt === null || (typeof entitlement.expiresAt === "number" && entitlement.expiresAt > Date.now()));
-  } catch { return false; }
+  return readEntitlement().tier === "pro";
 }
 function allowedModel(model: ReturnType<typeof readBundledCatalog>["models"][number], pro: boolean): boolean {
   return pro || (["Apache-2.0", "MIT"].includes(model.license) && model.sizeBytes <= FREE_MODEL_MAX_BYTES);
