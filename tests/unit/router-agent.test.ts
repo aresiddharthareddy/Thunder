@@ -47,6 +47,15 @@ describe("agent execution", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("escapes workspace");
   });
+  it("rejects symlink paths that resolve outside the workspace", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-outside-"));
+    await fs.writeFile(path.join(outside, "secret.txt"), "secret");
+    await fs.symlink(path.join(outside, "secret.txt"), path.join(root, "link.txt"));
+    const result = await runAgent([{ kind: "read", payload: { file: "link.txt" } }], { workspaceRoot: root, maxSteps: 2, maxFiles: 1, timeoutMs: 1000, allowWrites: false });
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("symlink");
+  });
 
   it("rolls back earlier edits when a later step fails", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));

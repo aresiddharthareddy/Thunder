@@ -37,6 +37,14 @@ function safePath(root: string, file: string): string {
   return resolved;
 }
 
+async function safeExistingPath(root: string, file: string): Promise<string> {
+  const resolved = safePath(root, file);
+  const canonicalRoot = await fs.realpath(root);
+  const canonical = await fs.realpath(resolved);
+  if (canonical !== canonicalRoot && !canonical.startsWith(`${canonicalRoot}${path.sep}`)) throw new Error(`Path escapes workspace through symlink: ${file}`);
+  return canonical;
+}
+
 function applyBlock(content: string, block: SearchReplaceBlock): string {
   const occurrences = content.split(block.search).length - 1;
   if (occurrences !== 1) throw new Error(`Expected exactly one match in ${block.file}, found ${occurrences}`);
@@ -61,7 +69,7 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
       if (Date.now() - started > policy.timeoutMs) throw new Error("Agent timeout exceeded");
       const item = plan[index]; const stepStarted = Date.now();
       if (item.kind === "read") {
-        const file = safePath(policy.workspaceRoot, String((item.payload as { file: string }).file));
+        const file = await safeExistingPath(policy.workspaceRoot, String((item.payload as { file: string }).file));
         const stat = await fs.stat(file); const maxReadBytes = policy.maxReadBytes ?? 1_048_576;
         if (stat.size > maxReadBytes) throw new Error(`Read exceeds ${maxReadBytes} bytes: ${(item.payload as { file: string }).file}`);
         const content = await fs.readFile(file, "utf8"); finish(index, item.kind, { ...(item.payload as object), content }, "ok", stepStarted); continue;
@@ -70,7 +78,7 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
         if (!policy.allowWrites) throw new Error("Agent writes are disabled by policy");
         const block = item.payload as SearchReplaceBlock;
         if (changed.size >= policy.maxFiles && !changed.has(block.file)) throw new Error(`Agent file budget exceeded: ${policy.maxFiles}`);
-        const file = safePath(policy.workspaceRoot, block.file); const content = await fs.readFile(file, "utf8");
+        const file = await safeExistingPath(policy.workspaceRoot, block.file); const content = await fs.readFile(file, "utf8");
         if (!originals.has(file)) originals.set(file, content);
         await fs.writeFile(file, applyBlock(content, block)); changed.add(block.file); finish(index, item.kind, block, "ok", stepStarted); continue;
       }
