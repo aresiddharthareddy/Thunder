@@ -16,7 +16,7 @@ function supportsMode(model: CatalogModel, mode: Mode): boolean {
 
 export function route(input: string, tier: number, explicitMode?: Mode): Mode {
   if (explicitMode) return explicitMode;
-  if (tier >= 2 && agentSignals.test(input)) return "agent";
+  if (tier >= 1 && agentSignals.test(input)) return "agent";
   if (planSignals.test(input)) return "plan";
   return "ask";
 }
