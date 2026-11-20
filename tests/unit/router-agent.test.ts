@@ -16,6 +16,9 @@ describe("smart routing", () => {
     expect(chooseModel("explain this function", 1, models).modelId).toBe("nano");
     expect(route("fix the failing test", 1)).toBe("ask");
   });
+  it("never selects a model above the detected hardware tier", () => {
+    expect(chooseModel("explain this function", 1, [{ ...models[1], roles: ["ask"] }]).modelId).toBeNull();
+  });
 });
 
 describe("agent execution", () => {

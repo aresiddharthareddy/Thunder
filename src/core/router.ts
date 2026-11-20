@@ -25,7 +25,7 @@ export function chooseModel(input: string, tier: HardwareTier, models: CatalogMo
     const bMode = b.roles.includes(mode) ? 1 : 0;
     return bMode - aMode || a.sizeBytes - b.sizeBytes;
   });
-  const selected = ranked[0] ?? models.find((model) => model.roles.includes("ask")) ?? null;
+  const selected = ranked[0] ?? null;
   return {
     mode,
     modelId: selected?.id ?? null,
