@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
     "verify:hashes": "tsx scripts/verify-hashes.ts"
-    ,"verify:release": "tsx scripts/verify-release.ts"
+    ,"verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.9.0",
