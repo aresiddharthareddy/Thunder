@@ -25,6 +25,7 @@ export const CH = {
   DIFF_REJECT: "diff:reject",
   TERMINAL_REQUEST: "terminal:request",
   TERMINAL_RESPONSE: "terminal:response",
+  TERMINAL_EXECUTE: "terminal:execute",
   ENTITLEMENT_GET: "entitlement:get",
   ENTITLEMENT_ACTIVATE: "entitlement:activate",
   DOCTOR_COLLECT: "doctor:collect",

@@ -6,6 +6,7 @@ import type { TierCapabilities } from "../core/hardware.js";
 import type { CatalogModel, DownloadProgress, Mode } from "../shared/types.js";
 import type { CompletionResult } from "../core/inference.js";
 import type { AgentPlanStep, AgentRunResult } from "../core/agent.js";
+import type { TerminalRequest, TerminalResult } from "../core/terminal.js";
 
 const api = {
   hardware: {
@@ -45,6 +46,9 @@ const api = {
   },
   agent: {
     run: (payload: { plan: AgentPlanStep[]; workspaceRoot: string; allowWrites: boolean }): Promise<AgentRunResult> => ipcRenderer.invoke(CH.AGENT_RUN, payload) as Promise<AgentRunResult>,
+  },
+  terminal: {
+    execute: (request: TerminalRequest): Promise<TerminalResult> => ipcRenderer.invoke(CH.TERMINAL_EXECUTE, request) as Promise<TerminalResult>,
   },
   security: {
     classifyPath: (payload: { targetPath: string; intent: "read" | "write"; workspaceRoot: string }) => ipcRenderer.invoke(CH.SECURITY_CLASSIFY_PATH, payload),

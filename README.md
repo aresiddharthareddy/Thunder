@@ -34,4 +34,4 @@ Inference, editor context, chat history, model files, and Agent audit records st
 
 ## Scope
 
-Thunder currently focuses on local model inference, secure file editing, model routing, Agent review/apply, and offline diagnostics. Terminal sandboxing, auto-update, cloud fallback, and telemetry upload are intentionally not enabled.
+Thunder currently focuses on local model inference, secure file editing, model routing, Agent review/apply, offline diagnostics, and explicitly approved workspace-scoped terminal commands. Terminal commands are bounded, output-limited, and reject destructive or pipe-to-shell patterns. Auto-update, cloud fallback, and telemetry upload are intentionally not enabled.
