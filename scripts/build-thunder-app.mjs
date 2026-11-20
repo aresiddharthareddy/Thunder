@@ -58,7 +58,7 @@ try {
   for(const key of ['defaultChatAgent','updateUrl','extensionsGallery','builtInExtensionsEnabledWithAutoUpdates']) delete product[key];
   await fs.writeFile(productFile,JSON.stringify(product,null,2));
   const info=path.join(app,'Contents','Info.plist');
-  for(const [key,value] of Object.entries({CFBundleDisplayName:'Thunder Workbench',CFBundleName:'Thunder Workbench',CFBundleIdentifier:'dev.thunder.workbench'}))
+  for(const [key,value] of Object.entries({CFBundleDisplayName:'Thunder Workbench',CFBundleName:'Thunder Workbench',CFBundleIdentifier:'dev.thunder.workbench',CFBundleExecutable:'VSCodium'}))
     execFileSync('plutil',['-replace',key,'-string',value,info]);
   execFileSync('xattr',['-cr',app]);
   execFileSync('codesign',['--force','--deep','--sign','-',app],{stdio:'inherit'});

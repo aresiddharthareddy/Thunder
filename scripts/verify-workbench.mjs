@@ -3,6 +3,7 @@ import path from "node:path";
 
 const app = path.resolve("release/Thunder Workbench.app");
 const required = [
+  "Contents/MacOS/VSCodium",
   "Contents/Resources/app/extensions/thunder-local/extension.cjs",
   "Contents/Resources/app/extensions/thunder-local/panel.cjs",
   "Contents/Resources/app/extensions/thunder-local/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
@@ -15,4 +16,6 @@ for (const relative of required) {
 }
 const product = JSON.parse(await fs.readFile(path.join(app, "Contents/Resources/app/product.json"), "utf8"));
 if (product.nameShort !== "Thunder Workbench" || product.dataFolderName !== ".thunder-workbench") throw new Error("Thunder Workbench product metadata is incomplete");
+const executable = (await import("node:child_process")).execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleExecutable", path.join(app, "Contents/Info.plist")], { encoding: "utf8" }).trim();
+if (executable !== "VSCodium") throw new Error(`Main executable metadata is incorrect: ${executable}`);
 console.log("Thunder Workbench bundle verified.");
