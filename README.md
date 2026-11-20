@@ -26,6 +26,8 @@ CI=true pnpm package
 CI=true pnpm verify:release
 ```
 
+For a headless build host that cannot create a macOS disk image, use `CI=true npm run package:dir` to produce and verify the `.app` bundle directly. The normal package command additionally creates DMG installers and requires macOS `hdiutil`.
+
 The release verifier creates `release/SHA256SUMS.txt`. macOS artifacts are currently unsigned unless a valid Apple Developer signing identity is configured. Users may need to right-click the app and choose Open on first launch.
 
 ## Workbench demo
