@@ -156,11 +156,12 @@ async function activate(ctx) {
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider('thunder.assistant',assistant,{webviewOptions:{retainContextWhenHidden:true}}),
     vscode.workspace.registerTextDocumentContentProvider('thunder-preview',{provideTextDocumentContent:uri=>assistant.previews.get(uri.toString())??''}),
     vscode.workspace.onDidChangeConfiguration(e=>{if(e.affectsConfiguration('thunder.zeroOutbound') && assistant.services.offline){assistant.services.download?.abort();assistant.run?.abort();}assistant.status();}));
-  const commands={open:()=>vscode.commands.executeCommand('thunder.assistant.focus'),models:()=>assistant.dispatch({type:'lab'}),doctor:()=>assistant.dispatch({type:'doctor'}),account:()=>assistant.dispatch({type:'account'})};
+  const focus=()=>vscode.commands.executeCommand('workbench.view.extension.thunder');
+  const commands={open:focus,models:()=>assistant.dispatch({type:'lab'}),doctor:()=>assistant.dispatch({type:'doctor'}),account:()=>assistant.dispatch({type:'account'})};
   for(const [name,handler] of Object.entries(commands)) ctx.subscriptions.push(vscode.commands.registerCommand('thunder.'+name,handler));
   if (!ctx.globalState.get('welcomed') && ctx.extensionMode!==vscode.ExtensionMode.Test) {
     await ctx.globalState.update('welcomed',true);
-    void vscode.commands.executeCommand('thunder.assistant.focus');
+    void focus().catch(()=>undefined);
     const pack=(await assistant.services.models()).filter(m=>m.tier<=assistant.services.hw.tier && (m.sizeBytes<2e9 || m.id.includes('7b') && assistant.services.hw.gb>=16));
     if(pack.some(m=>!m.location)) void assistant.services.hydrate().catch(e=>assistant.notice(e.message));
   }
