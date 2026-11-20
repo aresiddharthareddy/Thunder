@@ -78,6 +78,8 @@ button:disabled { cursor: wait; opacity: .6; }
 .file-tree small { color: #718096; font-size: 10px; overflow-wrap: anywhere; }
 .chat-header { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #293342; font-size: 13px; }
 .chat-header small { color: #718096; font-size: 10px; }
+.chat-header > div { display: flex; align-items: center; gap: 8px; }
+.new-chat { border-color: #344257; background: transparent; color: #9eb0c5; padding: 4px 7px; font-size: 10px; }
 .mode-picker { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #293342; }
 .mode-picker button { border: 1px solid #293342; background: transparent; color: #718096; border-radius: 6px; padding: 4px 10px; text-transform: capitalize; cursor: pointer; }
 .mode-picker button.selected { color: #77e0c5; border-color: #77e0c5; }
