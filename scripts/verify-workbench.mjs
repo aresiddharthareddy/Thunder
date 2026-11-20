@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const app = path.resolve("release/Thunder Workbench.app");
+const app = path.resolve(process.argv[2] ?? "release/Thunder Workbench.app");
 const required = [
   "Contents/MacOS/VSCodium",
   "Contents/Resources/app/extensions/thunder-local/extension.cjs",

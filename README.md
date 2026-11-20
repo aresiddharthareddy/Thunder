@@ -36,6 +36,8 @@ Build the VSCodium-based workbench with its local extension and verified model p
 
 The first Workbench build needs CMake and Apple Command Line Tools to compile the bundled CPU inference fallback from the pinned local source archive. If CMake is outside your PATH, set `THUNDER_CMAKE` to its executable. Run `npm run smoke:workbench-agent` after packaging to exercise a real model response, diff review, and approval against a simulated editor.
 
+Run `npm run package:workbench` to create a macOS ZIP and SHA-256 checksum without the demo account verification key. The bundle is ad-hoc signed for local testing. Public macOS distribution requires Developer ID signing and notarization.
+
 Launch the prepared macOS demo with `pnpm demo`.
 
 ## Privacy

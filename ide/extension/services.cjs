@@ -4,11 +4,10 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { promisify } = require('node:util');
-const { hardware, inventory } = require('./auto.cjs');
+const { hardware, inventory, fitsHardware, autoPack } = require('./auto.cjs');
 const scrypt = promisify(crypto.scrypt);
-const globalTarget = vscode.ConfigurationTarget.Global;
 class Services {
-  constructor(ctx) { this.ctx = ctx; this.hw = hardware(); this.user = 'Guest'; this.pro = false; }
+  constructor(ctx) { this.ctx = ctx; this.hw = hardware(); this.user = 'Guest'; this.pro = false; this.sessionVersion = 0; }
   get state() { return this.ctx.globalState; }
   get dir() { return this.state.get('modelFolder',path.join(this.ctx.globalStorageUri.fsPath,'models')); }
   get offline() { return vscode.workspace.getConfiguration('thunder').get('zeroOutbound',true); }
@@ -16,8 +15,9 @@ class Services {
   get tuning() { return this.pro ? this.state.get('tuning',{}) : {}; }
   models() { return inventory(this.ctx.extensionPath,this.dir,this.policy.allowed,this.pro); }
   async init() {
+    const version = this.sessionVersion;
     const user = await this.ctx.secrets.get('demo-session');
-    if (user) await this.restore(user);
+    if (user) await this.restore(user,version);
   }
   async accounts() {
     try {
@@ -27,8 +27,9 @@ class Services {
     }
     catch { return []; }
   }
-  async restore(user) {
+  async restore(user, version = this.sessionVersion) {
     const row = (await this.accounts()).find(a => a.user === user);
+    if (version !== this.sessionVersion) return;
     this.user = row?.user || 'Guest';
     this.pro = row?.role === 'admin';
   }
@@ -36,42 +37,49 @@ class Services {
     const users = await this.accounts();
     const pick = await vscode.window.showQuickPick([...users.map(a=>a.user),'Sign out'],{title:'Thunder account'});
     if (!pick) return;
-    if (pick === 'Sign out') { await this.ctx.secrets.delete('demo-session'); this.user='Guest'; this.pro=false; return; }
+    if (pick === 'Sign out') { this.sessionVersion++; await this.ctx.secrets.delete('demo-session'); this.user='Guest'; this.pro=false; return; }
     const password = await vscode.window.showInputBox({title:'Sign in as '+pick,password:true,ignoreFocusOut:true});
     if (password === undefined) return;
     const account = users.find(a=>a.user===pick);
     const key = await scrypt(password, account.salt, 64);
     if (!crypto.timingSafeEqual(key,Buffer.from(account.hash,'hex'))) throw new Error('Incorrect password.');
+    this.sessionVersion++;
     await this.ctx.secrets.store('demo-session',pick);
     await this.restore(pick);
   }
   async folder() {
-    if (this.download) throw new Error('Pause the current download first.');
+    if (this.preparing) throw new Error('Pause or dismiss the current download first.');
     const folder = await vscode.window.showOpenDialog({canSelectFiles:false,canSelectFolders:true,canSelectMany:false,openLabel:'Store model pack here'});
     if (folder) await this.state.update('modelFolder',folder[0].fsPath);
   }
   async hydrate(selection) {
     if (this.download) { this.download.abort(); return; }
-    const models = (await this.models()).filter(m=>m.tier<=this.hw.tier);
-    const pack = selection && this.pro ? models.filter(m=>m.id===selection) : models.filter(m=>m.sizeBytes<=2e9 || m.id.includes('7b') && this.hw.gb>=16);
-    const missing = pack.filter(m=>!m.location);
-    if (!missing.length) return vscode.window.showInformationMessage('Your local model pack is ready.');
-    const bytes = missing.reduce((n,m)=>n+m.sizeBytes,0);
-    const answer = await vscode.window.showInformationMessage('Download '+missing.length+' Auto pack component(s) · up to '+(bytes/1e9).toFixed(2)+' GB?', {modal:true, detail:this.dir+(this.offline?'\nContinuing enables network access for Thunder downloads.':'')},'Download');
-    if (answer !== 'Download' || this.download) return;
-    const wasOffline=this.offline;
-    if (wasOffline) await vscode.workspace.getConfiguration('thunder').update('zeroOutbound',false,globalTarget);
-    const controller = this.download = new AbortController();
+    if (this.preparing) return;
+    this.preparing = true;
     try {
+      const directory = this.dir;
+      const models = await this.models();
+      const pack = selection && this.pro ? models.filter(m=>m.id===selection && fitsHardware(m,this.hw)) : autoPack(models,this.hw);
+      const missing = pack.filter(m=>!m.location);
+      if (!pack.length) throw new Error('There are no compatible models allowed by the local policy.');
+      if (!missing.length) return await vscode.window.showInformationMessage('Your local model pack is ready.');
+      if (this.offline) throw new Error('Turn off Zero Outbound to download the missing Auto pack components.');
+      const bytes = missing.reduce((n,m)=>n+m.sizeBytes,0);
+      const answer = await vscode.window.showInformationMessage(
+        'Download '+missing.length+' model component(s) · up to '+(bytes/1e9).toFixed(2)+' GB?',
+        {modal:true,detail:directory},'Download');
+      if (answer !== 'Download') return;
+      if (this.offline) throw new Error('Zero Outbound was enabled while waiting for approval.');
+      const controller = this.download = new AbortController();
       const {installModel} = await import('./models.mjs');
       await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'Preparing Thunder Auto',cancellable:true},async (progress,cancel)=>{
         const listener = cancel.onCancellationRequested(()=>controller.abort());
-        try { for (const [i,m] of missing.entries()) await installModel(m,this.dir,{signal:controller.signal,offline:()=>this.offline,progress:f=>progress.report({message:(i+1)+'/'+missing.length+' · '+Math.floor(f*100)+'%'})}); }
+        try { for (const [i,m] of missing.entries()) await installModel(m,directory,{signal:controller.signal,offline:()=>this.offline,progress:f=>progress.report({message:(i+1)+'/'+missing.length+' · '+Math.floor(f*100)+'%'})}); }
         finally { listener.dispose(); }
       });
     } finally {
       this.download=null;
-      if (wasOffline) await vscode.workspace.getConfiguration('thunder').update('zeroOutbound',true,globalTarget);
+      this.preparing=false;
     }
   }
   async lab() {
@@ -80,7 +88,7 @@ class Services {
     const pick = await vscode.window.showQuickPick(models.map(m=>({label:m.displayName,description:(m.location?'Installed':'Download')+' · '+(m.sizeBytes/1e9).toFixed(1)+' GB',
       detail:'RAM fit '+Math.round(100*Math.max(0,1-m.sizeBytes/(os.totalmem()*.65)))+'/100 · '+m.contextLength+' model context · '+(this.state.get('rate:'+m.id) || 'Speed unmeasured'),m})),{title:'Model Lab'});
     if (!pick) return;
-    if (pick.m.tier>this.hw.tier) throw new Error('Model exceeds this hardware tier.');
+    if (!fitsHardware(pick.m,this.hw)) throw new Error('This model exceeds the local memory budget.');
     if (!pick.m.location) return this.hydrate(pick.m.id);
     const action = await vscode.window.showQuickPick(['Pin for Ask','Pin for Plan','Pin for Agent','Reset all to Auto'],{title:pick.label});
     if (action === 'Reset all to Auto') await this.state.update('pins',{});

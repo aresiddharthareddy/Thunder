@@ -4,8 +4,8 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { createHash } = require('node:crypto');
 const { Services } = require('./services.cjs');
-const { collect, redact } = require('./context.cjs');
-const { routes } = require('./auto.cjs');
+const { collect, composeContext, redact } = require('./context.cjs');
+const { autoPack, planRoute } = require('./auto.cjs');
 const { stage } = require('./changes.cjs');
 const { panel } = require('./panel.cjs');
 
@@ -94,47 +94,60 @@ class Assistant {
         answer='I’m Thunder Agent, your local coding assistant.';
       } else {
         this.post({type:'phase',text:'Finding relevant workspace files…'});
-        const sources=await collect(text);
+        const sources=await collect(text,signal,vscode);
         signal.throwIfAborted();
         if(mode==='agent' && !sources.size) throw new Error('Open a trusted workspace folder and a source file to propose an edit.');
-        const files=[...sources].map(([file,src])=>'File: '+file+'\n'+src.before.slice(0,7500)).join('\n\n');
-        const route=routes(await s.models(),s.hw,mode,text,s.pro && s.state.get('pins',{})[mode]);
+        const files=composeContext(sources,text,s.hw.tier===1?2600:5200);
+        const route=planRoute(await s.models(),s.hw,{
+          mode,input:text,pin:s.pro && s.state.get('pins',{})[mode],sourceCount:sources.size
+        });
         this.engine ??= new (await import('./engine.mjs')).LocalEngine();
-        let notes=this.history.slice(-4).join('\n').slice(-1100);
-        const infer=async (model,phase,input,maxTokens,onText)=>{
-          signal.throwIfAborted();
+        const previous=this.history.slice(-4).join('\n').slice(-750);
+        let notes=previous;
+        let phases=0;
+        const infer=async (model,phase,input,maxTokens,{onText,runSignal=signal}={})=>{
+          runSignal.throwIfAborted();
+          phases++;
           const result=await this.engine.run({
-            mode:phase,input,context:files,history:notes,model,file:model.location,signal,maxTokens,tuning:s.tuning,onText,
+            mode:phase,input,context:files,history:notes,model,file:model.location,signal:runSignal,maxTokens,tuning:s.tuning,onText,
             onBackend:backend=>this.post({type:'phase',text:backend==='cpu-defaults'?'Running on CPU with default decoding…':'Running on CPU…'})
           });
-          signal.throwIfAborted();
+          runSignal.throwIfAborted();
           if(result.elapsedMs>0 && result.usedOutputTokens>0) {
             await s.state.update('rate:'+model.id,Math.round(result.usedOutputTokens*1000/result.elapsedMs)+' tokens/s last run');
           }
           return result.text;
         };
-        if(route.length>1) {
-          this.post({type:'phase',text:'Reading workspace context…'});
-          notes=(await infer(route[0],'triage',text,72)).slice(0,450);
+        if(route.triage) {
+          this.post({type:'phase',text:'Checking which files matter…'});
+          try {
+            const runSignal=AbortSignal.any([signal,AbortSignal.timeout(12_000)]);
+            const hint=await infer(route.triage,'triage',text,64,{runSignal});
+            notes=[previous,'Local context hint: '+redact(hint).slice(0,350)].filter(Boolean).join('\n');
+          } catch {
+            // The primary model still has the source excerpts if the optional pass fails.
+            signal.throwIfAborted();
+          }
         }
-        const selected=route.at(-1);
         this.post({type:'phase',text:mode==='agent'?'Preparing a diff…':'Composing…'});
         if(mode==='agent') {
           let request=text;
           for(let i=0;i<2;i++) {
-            const proposal=await infer(selected,mode,request,900);
+            const selected=i===0?route.primary:route.retry;
+            const maxTokens=i===0?route.maxTokens:Math.min(900,route.maxTokens+160);
+            const proposal=await infer(selected,mode,request,maxTokens);
             signal.throwIfAborted();
             try { this.pending=stage(proposal,sources,s.hw.files); break; }
             catch(e) {
               if(i===1) throw new Error('Could not stage a valid edit. '+e.message);
-              this.post({type:'phase',text:'Checking the edit again…'});
-              request=text+'\nCorrect the previous proposal: '+e.message;
+              this.post({type:'phase',text:route.primary===route.retry?'Correcting the proposed edit…':'Giving the edit a deeper check…'});
+              request=text+'\nCorrect the previous proposal: '+redact(e.message).slice(0,350);
             }
           }
           answer=this.pending.summary;
           await this.preview(this.pending.batches[0][0].file);
-        } else answer=await infer(selected,mode,text,mode==='plan'?640:384,chunk=>this.post({type:'token',text:chunk}));
-        await s.audit('inference',{mode,phases:route.length,files:sources.size});
+        } else answer=await infer(route.primary,mode,text,route.maxTokens,{onText:chunk=>this.post({type:'token',text:chunk})});
+        await s.audit('inference',{mode,phases,files:sources.size});
       }
       this.history.push(redact(text),redact(answer)); this.history=this.history.slice(-4); await this.saveHistory();
       this.post({type:'end',text:answer});
@@ -181,7 +194,6 @@ class Assistant {
 let assistant;
 async function activate(ctx) {
   assistant=new Assistant(ctx);
-  await assistant.services.init();
   assistant.restoreHistory();
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider('thunder.assistant',assistant,{webviewOptions:{retainContextWhenHidden:true}}),
     vscode.workspace.registerTextDocumentContentProvider('thunder-preview',{provideTextDocumentContent:uri=>assistant.previews.get(uri.toString())??''}),
@@ -191,10 +203,11 @@ async function activate(ctx) {
   for(const [name,handler] of Object.entries(commands)) ctx.subscriptions.push(vscode.commands.registerCommand('thunder.'+name,handler));
   // Keep the primary Thunder surface visible after restarts, including an existing demo profile.
   void focus().catch(()=>undefined);
+  void assistant.services.init().then(()=>assistant.status(),()=>assistant.notice('Account storage is unavailable. Local Free mode is ready.'));
   if (!ctx.globalState.get('welcomed') && ctx.extensionMode!==vscode.ExtensionMode.Test) {
     await ctx.globalState.update('welcomed',true);
-    const pack=(await assistant.services.models()).filter(m=>m.tier<=assistant.services.hw.tier && (m.sizeBytes<2e9 || m.id.includes('7b') && assistant.services.hw.gb>=16));
-    if(pack.some(m=>!m.location)) void assistant.services.hydrate().catch(e=>assistant.notice(e.message));
+    const pack=autoPack(await assistant.services.models(),assistant.services.hw);
+    if(!assistant.services.offline && pack.some(m=>!m.location)) void assistant.services.hydrate().catch(e=>assistant.notice(e.message));
   }
 }
 async function deactivate(){ assistant?.run?.abort(); assistant?.services.download?.abort(); await assistant?.engine?.dispose(); }

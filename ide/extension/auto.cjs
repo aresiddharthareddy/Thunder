@@ -36,17 +36,34 @@ async function inventory(extension, directory, allowed, includeRestricted = fals
   return result.sort((a,b) => a.sizeBytes - b.sizeBytes);
 }
 
-function routes(models, hw, mode, input, pin) {
-  const fit = models.filter(m => m.tier <= hw.tier && m.location);
-  if (!fit.length) throw new Error('Prepare your Auto model pack to start local inference.');
-  const pinned = pin && fit.find(m => m.id === pin);
-  if (pinned) return [pinned];
-  const complex = /\b(architect\w*|design|refactor|across|migrate|security|multiple|debug|why)\b/i.test(input) || input.length > 500;
-  const small = fit[0];
-  const coder = hw.tier === 1 ? small : fit.find(m => m.sizeBytes >= 1e9) || small;
-  const strong = hw.tier === 1 ? small : fit.filter(m => m.sizeBytes <= hw.gb * 2 ** 30 * .45).at(-1) || coder;
-  if (complex && strong !== small) return [small, strong];
-  return [mode === 'ask' ? small : coder];
+function fitsHardware(model, hw) {
+  return model.tier <= hw.tier && model.sizeBytes <= hw.gb * 2 ** 30 * 0.45;
 }
 
-module.exports = { nano, hardware, inventory, routes };
+function autoPack(models, hw) {
+  return models.filter(model => fitsHardware(model, hw) && ['MIT', 'Apache-2.0'].includes(model.license) &&
+    (model.sizeBytes <= 2e9 || (hw.gb >= 16 && model.sizeBytes <= 5e9)));
+}
+
+function planRoute(models, hw, { mode, input, pin, sourceCount }) {
+  const fit = models.filter(model => model.location && fitsHardware(model, hw)).sort((a, b) => a.sizeBytes - b.sizeBytes);
+  if (!fit.length) throw new Error('Prepare your Auto model pack to start local inference.');
+  const complex = input.length > 600 ||
+    /\b(?:architect\w*|migrat\w*|race condition|regression|compatib\w*)\b/i.test(input) ||
+    (sourceCount > 1 && /\b(?:across|multi[- ]file|refactor|trace|compare)\b/i.test(input));
+  const maxTokens = mode === 'agent' ? (complex ? 900 : 480) : mode === 'plan' ? (complex ? 640 : 352) : (complex ? 512 : 256);
+  const pinned = pin && fit.find(model => model.id === pin);
+  if (pinned) return { primary: pinned, retry: pinned, maxTokens };
+  const nanoModel = fit[0];
+  const coder = fit.find(model => model.sizeBytes >= 1e9) ?? nanoModel;
+  const strongest = fit.at(-1);
+  const primary = hw.tier === 1 ? nanoModel : complex ? strongest : mode === 'ask' ? nanoModel : coder;
+  const triage = complex && sourceCount > 1 && nanoModel.sizeBytes < 1e9 && primary !== nanoModel ? nanoModel : undefined;
+  // Keep Tier 1 on a nano first. Upgrade a rejected edit only when the starter coder fits.
+  const retry = (hw.tier === 1 ? coder : strongest).sizeBytes > primary.sizeBytes
+    ? (hw.tier === 1 ? coder : strongest)
+    : primary;
+  return { primary, retry, triage, maxTokens };
+}
+
+module.exports = { nano, hardware, inventory, fitsHardware, autoPack, planRoute };
