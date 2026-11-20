@@ -11,3 +11,6 @@ dev-keys
 playwright-report
 test-results
 creds.txt
+.env
+.env.*
+!.env.example
