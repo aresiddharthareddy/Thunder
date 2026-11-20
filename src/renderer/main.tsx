@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import type { DiagnosticReport } from "../shared/diagnostics";
-import type { CatalogModel, DownloadProgress, HardwareProfile } from "../shared/types";
+import type { CatalogModel, DownloadProgress, Entitlement, HardwareProfile } from "../shared/types";
 import { Workspace } from "./workspace/Workspace";
 
 function formatBytes(bytes: number): string {
@@ -32,6 +32,19 @@ function HardwareCard({ hardware }: { hardware: HardwareProfile }): JSX.Element 
   );
 }
 
+function ProPreview({ entitlement }: { entitlement: Entitlement | null }): JSX.Element {
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState<"annual" | "monthly" | "team">("annual");
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (entitlement?.tier === "pro") return <section className="card pro-card"><p className="eyebrow">THUNDER PRO</p><h2>Pro features unlocked</h2><p className="reason">Your local license is active until {new Date(entitlement.expiresAt ?? 0).toLocaleDateString()}.</p></section>;
+  async function submit(): Promise<void> {
+    setError(null);
+    try { await window.thunder.waitlist.submit({ email, planInterest: plan }); setSubmitted(true); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
+  return <section className="card pro-card"><p className="eyebrow">PRO PREVIEW</p><h2>Unlock more local intelligence</h2><p className="reason">Manual model pinning, performance tuning, team policy, and diagnostic bundles are planned for Thunder Pro. Join the waitlist; no payment is taken.</p>{submitted ? <p className="saved">You’re on the waitlist. We’ll keep your request local until you choose to share it.</p> : <div className="waitlist-form"><input aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" type="email" /><select aria-label="Plan" value={plan} onChange={(event) => setPlan(event.target.value as typeof plan)}><option value="annual">$49 / year</option><option value="monthly">$6 / month</option><option value="team">Team</option></select><button type="button" onClick={() => void submit()}>Join waitlist</button>{error && <small className="error">{error}</small>}</div>}</section>;
+}
+
 function App(): JSX.Element {
   const [hardware, setHardware] = useState<HardwareProfile | null>(null);
   const [report, setReport] = useState<DiagnosticReport | null>(null);
@@ -40,6 +53,7 @@ function App(): JSX.Element {
   const [models, setModels] = useState<Array<CatalogModel & { downloaded: boolean }>>([]);
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
   const [workspace, setWorkspace] = useState(false);
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
 
   useEffect(() => {
     if (!window.thunder) {
@@ -50,6 +64,7 @@ function App(): JSX.Element {
       setError(reason instanceof Error ? reason.message : "Hardware scan failed");
     });
     void window.thunder.catalog.list().then(setModels).catch(() => undefined);
+    void window.thunder.entitlement.get().then(setEntitlement).catch(() => setEntitlement(null));
     return window.thunder.catalog.onProgress((update) => setProgress((current) => ({ ...current, [update.modelId]: update })));
   }, []);
 
@@ -88,6 +103,7 @@ function App(): JSX.Element {
         {error && <div className="error">{error}</div>}
         {!hardware && !error && <section className="card scanning">Scanning hardware<span className="pulse">…</span></section>}
         {hardware && <HardwareCard hardware={hardware} />}
+        <ProPreview entitlement={entitlement} />
         <section className="card model-card">
           <div className="card-heading"><div><p className="eyebrow">M2 · LOCAL MODELS</p><h2>Model catalog</h2></div><span className="model-count">{models.length} available</span></div>
           <p className="reason">Download a model locally when you are ready. Downloads are verified with SHA-256 before activation.</p>

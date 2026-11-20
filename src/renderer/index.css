@@ -46,6 +46,11 @@ button:disabled { cursor: wait; opacity: .6; }
 .error { border: 1px solid #713e4d; color: #ffb4c0; background: #321c25; padding: 14px 16px; border-radius: 8px; }
 .saved { color: #55d39b; font-size: 12px; }
 .model-card { margin-top: 18px; }
+.pro-card { margin-top: 18px; }
+.waitlist-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.waitlist-form input, .waitlist-form select { min-width: 0; flex: 1 1 170px; border: 1px solid #344257; border-radius: 7px; background: #111722; color: #e7ecf3; padding: 10px; font: 12px inherit; }
+.waitlist-form select { flex: 0 1 130px; }
+.waitlist-form .error { flex-basis: 100%; font-size: 11px; }
 .model-count { color: #8492a7; font-size: 12px; }
 .model-list { display: grid; gap: 10px; }
 .model-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid #293342; padding-top: 14px; }
