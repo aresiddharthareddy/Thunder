@@ -34,15 +34,19 @@ function HardwareCard({ hardware }: { hardware: HardwareProfile }): JSX.Element 
 
 function ProPreview({ entitlement }: { entitlement: Entitlement | null }): JSX.Element {
   const [email, setEmail] = useState("");
+  const [licenseKey, setLicenseKey] = useState("");
   const [plan, setPlan] = useState<"annual" | "monthly" | "team">("annual");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [activating, setActivating] = useState(false);
   if (entitlement?.tier === "pro") return <section className="card pro-card"><p className="eyebrow">THUNDER PRO</p><h2>Pro features unlocked</h2><p className="reason">Your local license is active until {new Date(entitlement.expiresAt ?? 0).toLocaleDateString()}.</p></section>;
+  async function activate(): Promise<void> { if (!licenseKey.trim() || activating) return; setActivating(true); setActivationError(null); try { await window.thunder.entitlement.activate(licenseKey.trim()); window.location.reload(); } catch (reason) { setActivationError(reason instanceof Error ? reason.message : String(reason)); } finally { setActivating(false); } }
   async function submit(): Promise<void> {
     setError(null);
     try { await window.thunder.waitlist.submit({ email, planInterest: plan }); setSubmitted(true); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   }
-  return <section className="card pro-card"><p className="eyebrow">PRO PREVIEW</p><h2>Unlock more local intelligence</h2><p className="reason">Manual model pinning, performance tuning, team policy, and diagnostic bundles are planned for Thunder Pro. Join the waitlist; no payment is taken.</p>{submitted ? <p className="saved">You’re on the waitlist. We’ll keep your request local until you choose to share it.</p> : <div className="waitlist-form"><input aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" type="email" /><select aria-label="Plan" value={plan} onChange={(event) => setPlan(event.target.value as typeof plan)}><option value="annual">$49 / year</option><option value="monthly">$6 / month</option><option value="team">Team</option></select><button type="button" onClick={() => void submit()}>Join waitlist</button>{error && <small className="error">{error}</small>}</div>}</section>;
+  return <section className="card pro-card"><p className="eyebrow">PRO PREVIEW</p><h2>Unlock more local intelligence</h2><p className="reason">Manual model pinning, performance tuning, team policy, and diagnostic bundles are planned for Thunder Pro. Join the waitlist; no payment is taken.</p><div className="license-form"><input aria-label="License key" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} placeholder="Paste an Ed25519 license key" /><button type="button" onClick={() => void activate()} disabled={activating || !licenseKey.trim()}>{activating ? "Activating…" : "Activate license"}</button>{activationError && <small className="error">{activationError}</small>}</div>{submitted ? <p className="saved">You’re on the waitlist. We’ll keep your request local until you choose to share it.</p> : <div className="waitlist-form"><input aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" type="email" /><select aria-label="Plan" value={plan} onChange={(event) => setPlan(event.target.value as typeof plan)}><option value="annual">$49 / year</option><option value="monthly">$6 / month</option><option value="team">Team</option></select><button type="button" onClick={() => void submit()}>Join waitlist</button>{error && <small className="error">{error}</small>}</div>}</section>;
 }
 
 function App(): JSX.Element {
