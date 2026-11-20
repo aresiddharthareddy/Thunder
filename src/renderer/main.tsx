@@ -114,7 +114,7 @@ function App(): JSX.Element {
 
   const compatibleDownloaded = hardware ? models.find((model) => model.downloaded && (model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2))) : undefined;
   return (
-    workspace && hardware && compatibleDownloaded ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={compatibleDownloaded.id} tier={hardware.tier} /></> :
+    workspace && hardware && compatibleDownloaded ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={compatibleDownloaded.id} tier={hardware.tier} free={entitlement?.tier !== "pro"} /></> :
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-mark">T</div>

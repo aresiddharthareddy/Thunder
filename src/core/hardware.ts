@@ -142,7 +142,7 @@ export interface TierCapabilities {
 export function capabilitiesFor(tier: HardwareTier): TierCapabilities {
   switch (tier) {
     case 1:
-      return { modes: ["ask", "plan"], maxFilesPerAgentRun: 1, agentStepTimeoutMs: 0 };
+      return { modes: ["ask", "plan", "agent"], maxFilesPerAgentRun: 1, agentStepTimeoutMs: 60_000 };
     case 2:
       return {
         modes: ["ask", "plan", "agent"],

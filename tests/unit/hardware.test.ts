@@ -45,11 +45,11 @@ describe("classifyTier", () => {
 });
 
 describe("capabilitiesFor", () => {
-  it("tier 1 has no agent mode", () => {
+  it("tier 1 exposes hardware-scoped single-file agent mode", () => {
     const c = capabilitiesFor(1);
-    expect(c.modes).toEqual(["ask", "plan"]);
+    expect(c.modes).toEqual(["ask", "plan", "agent"]);
     expect(c.maxFilesPerAgentRun).toBe(1);
-    expect(c.agentStepTimeoutMs).toBe(0);
+    expect(c.agentStepTimeoutMs).toBe(60_000);
   });
 
   it("tier 2.5 has 90s step timeout", () => {
