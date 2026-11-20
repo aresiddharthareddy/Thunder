@@ -12,7 +12,30 @@ const CatalogSchema = z.object({ schemaVersion: z.number().int(), models: z.arra
 function bundledPath(): string { return app.isPackaged ? path.join(process.resourcesPath, "models.json") : path.join(app.getAppPath(), "resources", "models.json"); }
 export function defaultModelsDir(): string { return path.join(app.getPath("userData"), "models"); }
 export function readBundledCatalog(): Catalog { return CatalogSchema.parse(JSON.parse(fs.readFileSync(bundledPath(), "utf8"))) as Catalog; }
-export async function loadCatalog(): Promise<Catalog> { return readBundledCatalog(); }
+const CATALOG_URL = "https://thunder-models.pages.dev/models.json";
+export function mergeCatalog(bundled: Catalog, remote: Catalog): Catalog {
+  const bundledById = new Map(bundled.models.map((model) => [model.id, model]));
+  const models = remote.models.map((candidate): CatalogModel | null => {
+    const pinned = bundledById.get(candidate.id);
+    if (!pinned) return null;
+    return { ...candidate, repo: pinned.repo, file: pinned.file, revision: pinned.revision, sizeBytes: pinned.sizeBytes, sha256: pinned.sha256 } as CatalogModel;
+  }).filter((model): model is CatalogModel => model !== null);
+  return models.length > 0 ? { schemaVersion: bundled.schemaVersion, models } : bundled;
+}
+export async function loadCatalog(fetchImpl: typeof fetch = fetch): Promise<Catalog> {
+  const bundled = readBundledCatalog();
+  try {
+    assertNoOutbound("catalog-override");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3_000);
+    try {
+      const response = await fetchImpl(CATALOG_URL, { signal: controller.signal, headers: { Accept: "application/json" } });
+      if (!response.ok) return bundled;
+      const remote = CatalogSchema.parse(await response.json()) as Catalog;
+      return mergeCatalog(bundled, remote);
+    } finally { clearTimeout(timeout); }
+  } catch { return bundled; }
+}
 export function findModel(catalog: Catalog, id: string): CatalogModel { const model = catalog.models.find((item) => item.id === id); if (!model) throw new Error(`Unknown model id: ${id}`); return model; }
 async function exists(file: string): Promise<boolean> { try { await fsp.access(file); return true; } catch { return false; } }
 async function size(file: string): Promise<number> { try { return (await fsp.stat(file)).size; } catch { return -1; } }
