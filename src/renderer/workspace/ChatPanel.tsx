@@ -14,7 +14,7 @@ function parsePlan(text: string): AgentPlanStep[] {
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { steps?: unknown }).steps)) throw new Error("Agent response did not contain a steps array");
   const steps = (parsed as { steps: unknown[] }).steps;
   if (!steps.length) throw new Error("Agent returned no actionable steps");
-  return steps.map((item, index) => {
+  const normalized = steps.map((item, index) => {
     if (!item || typeof item !== "object") throw new Error(`Invalid agent step ${index + 1}`);
     const step = item as { kind?: unknown; payload?: unknown };
     const payload = step.payload as { file?: unknown; search?: unknown; replace?: unknown } | undefined;
@@ -22,6 +22,8 @@ function parsePlan(text: string): AgentPlanStep[] {
     if (step.kind === "search_replace" && (typeof payload.search !== "string" || typeof payload.replace !== "string")) throw new Error(`Invalid replacement in agent step ${index + 1}`);
     return { kind: step.kind, payload } as AgentPlanStep;
   });
+  if (!normalized.some((step) => step.kind === "search_replace")) throw new Error("Agent returned no file edit");
+  return normalized;
 }
 
 function stepPreview(step: AgentPlanStep): string {
