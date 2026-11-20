@@ -93,6 +93,7 @@ button:disabled { cursor: wait; opacity: .6; }
 .agent-review li { margin: 4px 0; }
 .agent-review code { color: #77e0c5; }
 .agent-review small { color: #8194a8; }
+.agent-actions { display: flex; gap: 7px; }
 .composer { padding: 12px; border-top: 1px solid #293342; }
 .composer textarea { width: 100%; resize: vertical; border: 1px solid #344257; border-radius: 7px; background: #111722; color: #e7ecf3; padding: 10px; font: 13px inherit; outline: none; }
 .terminal-panel { border-top: 1px solid #293342; background: #0d121a; padding: 10px 12px; }
