@@ -18,4 +18,9 @@ export function registerFilesIpc(): void {
   });
   ipcMain.handle(CH.FILE_READ, async (_event, payload: { filePath: string; workspaceRoot: string }) => { assertAllowed(payload.filePath, "read", payload.workspaceRoot); return fs.readFile(payload.filePath, "utf8"); });
   ipcMain.handle(CH.FILE_WRITE, async (_event, payload: { filePath: string; workspaceRoot: string; content: string }) => { assertAllowed(payload.filePath, "write", payload.workspaceRoot); await fs.writeFile(payload.filePath, payload.content, "utf8"); return { ok: true }; });
+  ipcMain.handle(CH.FILE_TREE, async (_event, payload: { workspaceRoot: string }) => {
+    const root = path.resolve(payload.workspaceRoot); const output: string[] = []; const ignored = new Set([".git", "node_modules", "dist", "release", ".thunder", ".thunder-build"]);
+    async function visit(directory: string): Promise<void> { if (output.length >= 2000) return; for (const entry of await fs.readdir(directory, { withFileTypes: true })) { if (ignored.has(entry.name) || entry.name.startsWith(".")) continue; const full = path.join(directory, entry.name); if (entry.isDirectory()) await visit(full); else if (entry.isFile()) { const relative = path.relative(root, full); if (classifyPath(full, "read", { workspaceRoot: root }).action === "allow") output.push(relative); } } }
+    await visit(root); return output.sort();
+  });
 }

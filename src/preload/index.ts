@@ -54,6 +54,7 @@ const api = {
   files: {
     open: (): Promise<{ filePath: string; workspaceRoot: string; content: string } | null> => ipcRenderer.invoke(CH.FILE_OPEN) as Promise<{ filePath: string; workspaceRoot: string; content: string } | null>,
     read: (payload: { filePath: string; workspaceRoot: string }): Promise<string> => ipcRenderer.invoke(CH.FILE_READ, payload) as Promise<string>,
+    tree: (workspaceRoot: string): Promise<string[]> => ipcRenderer.invoke(CH.FILE_TREE, { workspaceRoot }) as Promise<string[]>,
     write: (payload: { filePath: string; workspaceRoot: string; content: string }): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.FILE_WRITE, payload) as Promise<{ ok: boolean }>,
   },
 };
