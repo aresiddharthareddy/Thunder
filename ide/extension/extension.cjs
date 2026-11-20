@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { createHash } = require('node:crypto');
 const { Services } = require('./services.cjs');
 const { collect, redact } = require('./context.cjs');
 const { routes } = require('./auto.cjs');
@@ -15,6 +16,12 @@ class Assistant {
     this.previews=new Map();
     this.history=[];
   }
+  historyKey() {
+    const root=vscode.workspace.workspaceFolders?.[0]?.uri.fsPath||'no-workspace';
+    return 'memory:'+createHash('sha256').update(root).digest('hex').slice(0,24);
+  }
+  restoreHistory() { this.history=this.ctx.globalState.get(this.historyKey(),[]).slice(-4); }
+  async saveHistory() { await this.ctx.globalState.update(this.historyKey(),this.history.slice(-4)); }
   post(message) { return this.view?.webview.postMessage(message); }
   status() {
     const s=this.services;
@@ -42,6 +49,7 @@ class Assistant {
           case 'apply': await this.apply(); break;
           case 'reject': this.clearReview(); break;
           case 'account': await this.services.account(); this.history=[]; this.clearReview(); this.post({type:'clear'}); break;
+          case 'memory': this.history=[]; await this.saveHistory(); this.post({type:'clear'}); this.notice('Local context memory cleared.'); break;
           case 'lab': await this.services.lab(); break;
           case 'folder': await this.services.folder(); break;
           case 'tuning': await this.services.tune(); break;
@@ -118,7 +126,7 @@ class Assistant {
         } else answer=await infer(selected,mode,text,mode==='plan'?640:384,chunk=>this.post({type:'token',text:chunk}));
         await s.audit('inference',{mode,phases:route.length,files:sources.size});
       }
-      this.history.push(redact(text),redact(answer)); this.history=this.history.slice(-4);
+      this.history.push(redact(text),redact(answer)); this.history=this.history.slice(-4); await this.saveHistory();
       this.post({type:'end',text:answer});
     } catch(e) { this.post({type:'end',text:signal.aborted?'Cancelled.':e.message}); }
     finally { this.run=null; this.status(); }
@@ -153,15 +161,17 @@ let assistant;
 async function activate(ctx) {
   assistant=new Assistant(ctx);
   await assistant.services.init();
+  assistant.restoreHistory();
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider('thunder.assistant',assistant,{webviewOptions:{retainContextWhenHidden:true}}),
     vscode.workspace.registerTextDocumentContentProvider('thunder-preview',{provideTextDocumentContent:uri=>assistant.previews.get(uri.toString())??''}),
     vscode.workspace.onDidChangeConfiguration(e=>{if(e.affectsConfiguration('thunder.zeroOutbound') && assistant.services.offline){assistant.services.download?.abort();assistant.run?.abort();}assistant.status();}));
   const focus=()=>vscode.commands.executeCommand('workbench.view.extension.thunder');
   const commands={open:focus,models:()=>assistant.dispatch({type:'lab'}),doctor:()=>assistant.dispatch({type:'doctor'}),account:()=>assistant.dispatch({type:'account'})};
   for(const [name,handler] of Object.entries(commands)) ctx.subscriptions.push(vscode.commands.registerCommand('thunder.'+name,handler));
+  // Keep the primary Thunder surface visible after restarts, including an existing demo profile.
+  void focus().catch(()=>undefined);
   if (!ctx.globalState.get('welcomed') && ctx.extensionMode!==vscode.ExtensionMode.Test) {
     await ctx.globalState.update('welcomed',true);
-    void focus().catch(()=>undefined);
     const pack=(await assistant.services.models()).filter(m=>m.tier<=assistant.services.hw.tier && (m.sizeBytes<2e9 || m.id.includes('7b') && assistant.services.hw.gb>=16));
     if(pack.some(m=>!m.location)) void assistant.services.hydrate().catch(e=>assistant.notice(e.message));
   }

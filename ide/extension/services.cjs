@@ -59,7 +59,8 @@ class Services {
     const bytes = missing.reduce((n,m)=>n+m.sizeBytes,0);
     const answer = await vscode.window.showInformationMessage('Download '+missing.length+' Auto pack component(s) · up to '+(bytes/1e9).toFixed(2)+' GB?', {modal:true, detail:this.dir+(this.offline?'\nContinuing enables network access for Thunder downloads.':'')},'Download');
     if (answer !== 'Download' || this.download) return;
-    if (this.offline) await vscode.workspace.getConfiguration('thunder').update('zeroOutbound',false,globalTarget);
+    const wasOffline=this.offline;
+    if (wasOffline) await vscode.workspace.getConfiguration('thunder').update('zeroOutbound',false,globalTarget);
     const controller = this.download = new AbortController();
     try {
       const {installModel} = await import('./models.mjs');
@@ -68,7 +69,10 @@ class Services {
         try { for (const [i,m] of missing.entries()) await installModel(m,this.dir,{signal:controller.signal,offline:()=>this.offline,progress:f=>progress.report({message:(i+1)+'/'+missing.length+' · '+Math.floor(f*100)+'%'})}); }
         finally { listener.dispose(); }
       });
-    } finally { this.download=null; }
+    } finally {
+      this.download=null;
+      if (wasOffline) await vscode.workspace.getConfiguration('thunder').update('zeroOutbound',true,globalTarget);
+    }
   }
   async lab() {
     if (!this.pro) return this.hydrate();
