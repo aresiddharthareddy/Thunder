@@ -21,4 +21,15 @@ describe("terminal safety", () => {
     expect(result.stdout).toBe("thunder");
     expect(result.truncated).toBe(false);
   });
+  it("does not inherit obvious secret environment variables", async () => {
+    const previous = process.env.THUNDER_TEST_SECRET;
+    process.env.THUNDER_TEST_SECRET = "should-not-leak";
+    try {
+      const result = await executeTerminal({ ...base, command: "printf \"$THUNDER_TEST_SECRET\"", approved: true });
+      expect(result.stdout).toBe("");
+    } finally {
+      if (previous === undefined) delete process.env.THUNDER_TEST_SECRET;
+      else process.env.THUNDER_TEST_SECRET = previous;
+    }
+  });
 });

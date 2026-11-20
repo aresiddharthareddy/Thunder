@@ -31,6 +31,9 @@ function inside(root: string, target: string): boolean {
 function dangerous(command: string): boolean {
   return /(^|[;&|]\s*)(sudo|rm\s+-rf|mkfs(?:\s|$)|diskutil\s+erase|format\s+[a-z]:|curl\b[^\n|]*\|\s*(sh|bash)|wget\b[^\n|]*\|\s*(sh|bash)|chmod\s+777)(?:\s|$)/i.test(command.trim());
 }
+function terminalEnvironment(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/(?:token|password|passwd|secret|private[_-]?key|api[_-]?key)/i.test(key)));
+}
 
 export function validateTerminalRequest(request: TerminalRequest): void {
   if (!request.command.trim()) throw new Error("Terminal command cannot be empty");
@@ -45,8 +48,8 @@ export function executeTerminal(request: TerminalRequest, signal?: AbortSignal):
   const timeoutMs = Math.max(1_000, Math.min(request.timeoutMs ?? DEFAULT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS));
   return new Promise((resolve, reject) => {
     const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
-    const args = process.platform === "win32" ? ["/d", "/s", "/c", request.command] : ["-lc", request.command];
-    const child = spawn(shell, args, { cwd: path.resolve(request.cwd), env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const args = process.platform === "win32" ? ["/d", "/s", "/c", request.command] : ["-c", request.command];
+    const child = spawn(shell, args, { cwd: path.resolve(request.cwd), env: terminalEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let truncated = false;
