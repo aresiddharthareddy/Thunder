@@ -75,6 +75,8 @@ const api = {
   chat: {
     createSession: (payload: { mode: Mode; title?: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_SESSION_CREATE, payload) as Promise<{ id: string }>,
     latest: (payload: { mode: Mode }): Promise<{ id: string; title: string; mode: Mode; messages: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> } | null> => ipcRenderer.invoke(CH.CHAT_SESSION_LATEST, payload) as Promise<{ id: string; title: string; mode: Mode; messages: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> } | null>,
+    list: (payload: { mode: Mode }): Promise<Array<{ id: string; title: string; mode: Mode; updatedAt: number }>> => ipcRenderer.invoke(CH.CHAT_SESSION_LIST, payload) as Promise<Array<{ id: string; title: string; mode: Mode; updatedAt: number }>>,
+    get: (sessionId: string): Promise<{ id: string; title: string; mode: Mode; messages: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> } | null> => ipcRenderer.invoke(CH.CHAT_SESSION_GET, sessionId) as Promise<{ id: string; title: string; mode: Mode; messages: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> } | null>,
     append: (payload: { sessionId: string; role: "user" | "assistant" | "system" | "tool"; content: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_MESSAGE_APPEND, payload) as Promise<{ id: string }>,
   },
 };

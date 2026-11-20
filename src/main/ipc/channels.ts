@@ -16,6 +16,8 @@ export const CH = {
   CHAT_SESSION_CREATE: "chat:session:create",
   CHAT_MESSAGE_APPEND: "chat:message:append",
   CHAT_SESSION_LATEST: "chat:session:latest",
+  CHAT_SESSION_LIST: "chat:session:list",
+  CHAT_SESSION_GET: "chat:session:get",
   FILE_READ: "file:read",
   FILE_OPEN: "file:open",
   FILE_TREE: "file:tree",
