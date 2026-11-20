@@ -60,6 +60,10 @@ button:disabled { cursor: wait; opacity: .6; }
 .editor-pane { flex: 1; min-width: 0; border-right: 1px solid #293342; }
 .file-tab { height: 36px; padding: 10px 16px; color: #aab8ca; border-bottom: 1px solid #293342; font: 12px "JetBrains Mono", monospace; }
 .chat-panel { width: 420px; display: flex; flex-direction: column; }
+.file-tree { width: 220px; padding: 12px; border-right: 1px solid #293342; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.file-tree button { display: block; border: 0; background: transparent; color: #a7b3c4; text-align: left; padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.file-tree button:hover { background: #1b2532; color: #77e0c5; }
+.file-tree small { color: #718096; font-size: 10px; overflow-wrap: anywhere; }
 .chat-header { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #293342; font-size: 13px; }
 .chat-header small { color: #718096; font-size: 10px; }
 .mode-picker { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #293342; }
