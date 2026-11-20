@@ -1,0 +1,43 @@
+name: Thunder CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Thunder
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install extension dependencies
+        working-directory: ide/extension
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Build main process
+        run: npm run build:main
+      - name: Build renderer
+        run: npm run build:renderer
