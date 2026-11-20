@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import type { AgentPlanStep } from "../../../src/core/agent";
 
 interface Message { role: "user" | "assistant"; content: string; streaming?: boolean; }
-interface Props { modelId: string; workspaceRoot: string; filePath: string; context: string; onRefresh: () => Promise<void>; }
+interface Props { modelId: string; tier: 1 | 2 | 2.5 | 3; workspaceRoot: string; filePath: string; context: string; onRefresh: () => Promise<void>; }
 function parsePlan(text: string): AgentPlanStep[] { const source = text.match(/```json\s*([\s\S]*?)```/i)?.[1] ?? text; const parsed = JSON.parse(source.trim()) as { steps?: AgentPlanStep[] }; if (!Array.isArray(parsed.steps)) throw new Error("Agent response did not contain a valid plan"); return parsed.steps; }
 
-export function ChatPanel({ modelId, workspaceRoot, filePath: _filePath, context, onRefresh }: Props): JSX.Element {
+export function ChatPanel({ modelId, tier, workspaceRoot, filePath: _filePath, context, onRefresh }: Props): JSX.Element {
+  void tier;
   const [messages, setMessages] = useState<Message[]>([]); const [input, setInput] = useState(""); const [mode, setMode] = useState<"ask" | "plan" | "agent">("ask"); const [busy, setBusy] = useState(false); const [pendingPlan, setPendingPlan] = useState<AgentPlanStep[] | null>(null); const active = useRef<string | null>(null); const session = useRef<string | null>(null);
   useEffect(() => { void window.thunder.chat.latest({ mode }).then((latest) => { if (latest) { session.current = latest.id; const restored = latest.messages.filter((message): message is Message => message.role === "user" || message.role === "assistant"); persistedUser.current = restored.filter((message) => message.role === "user").length; persistedAssistant.current = restored.filter((message) => message.role === "assistant").length; setMessages(restored); } else return window.thunder.chat.createSession({ mode }).then((result) => { session.current = result.id; persistedUser.current = 0; persistedAssistant.current = 0; }); }); }, [mode]);
   const persistedAssistant = useRef(0);

@@ -72,7 +72,7 @@ function App(): JSX.Element {
   }
 
   return (
-    workspace && hardware ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={models.find((model) => model.downloaded)?.id ?? "qwen2.5-coder-1.5b-q4"} /></> :
+    workspace && hardware ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={models.find((model) => model.downloaded)?.id ?? "qwen2.5-coder-1.5b-q4"} tier={hardware.tier} /></> :
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-mark">T</div>
