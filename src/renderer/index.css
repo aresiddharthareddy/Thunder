@@ -86,6 +86,11 @@ button:disabled { cursor: wait; opacity: .6; }
 .message.user { background: #173b68; }
 .message.assistant { background: #151d29; }
 .message small { display: block; margin-bottom: 6px; color: #7f91a8; font-size: 10px; text-transform: uppercase; }
+.agent-review { margin: 10px 12px; padding: 10px; border: 1px solid #4d6c83; border-radius: 8px; background: #142331; font-size: 11px; }
+.agent-review ul { margin: 8px 0; padding-left: 16px; color: #b5c6d8; max-height: 120px; overflow: auto; }
+.agent-review li { margin: 4px 0; }
+.agent-review code { color: #77e0c5; }
+.agent-review small { color: #8194a8; }
 .composer { padding: 12px; border-top: 1px solid #293342; }
 .composer textarea { width: 100%; resize: vertical; border: 1px solid #344257; border-radius: 7px; background: #111722; color: #e7ecf3; padding: 10px; font: 13px inherit; outline: none; }
 .terminal-panel { border-top: 1px solid #293342; background: #0d121a; padding: 10px 12px; }
