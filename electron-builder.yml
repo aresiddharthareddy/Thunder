@@ -17,8 +17,6 @@ asarUnpack:
 extraResources:
   - from: resources/models.json
     to: models.json
-  - from: public/thunder-public-key.pem
-    to: thunder-public-key.pem
 mac:
   target:
     - target: dmg

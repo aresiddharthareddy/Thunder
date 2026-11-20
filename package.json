@@ -2,6 +2,8 @@
   "name": "thunder",
   "version": "0.1.0",
   "private": true,
+  "description": "Local-first AI coding IDE with fast local model routing and safe agent execution",
+  "author": "Thunder contributors",
   "type": "module",
   "main": "dist/main/index.js",
   "scripts": {
@@ -14,8 +16,8 @@
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
-    "verify:hashes": "tsx scripts/verify-hashes.ts"
-    ,"verify:release": "node scripts/verify-release.mjs"
+    "verify:hashes": "tsx scripts/verify-hashes.ts",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.9.0",
@@ -53,8 +55,5 @@
     "vite": "6.0.5",
     "vitest": "2.1.8",
     "zustand": "5.0.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3", "electron", "node-llama-cpp"]
   }
 }
