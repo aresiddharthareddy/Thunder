@@ -32,6 +32,8 @@ The release verifier creates `release/SHA256SUMS.txt`. macOS artifacts are curre
 
 Build the VSCodium-based workbench with its local extension and verified model pack using `pnpm build:workbench`. To create the optional local demo profile, run `pnpm provision:demo` and enter the two demo passwords when prompted. Passwords are hashed into the local profile and are not stored in the repository. Run `pnpm verify:workbench` to verify the bundle.
 
+Launch the prepared macOS demo with `pnpm demo`.
+
 ## Privacy
 
 Inference, editor context, chat history, model files, and Agent audit records stay local by default. Zero Outbound mode blocks network operations. `creds.txt`, model binaries, build output, and local dependency stores are excluded from Git.

@@ -22,7 +22,8 @@
     "verify:artifact": "node scripts/verify-artifact.mjs",
     "provision:demo": "node scripts/provision-demo.mjs",
     "build:workbench": "node scripts/build-thunder-app.mjs --demo",
-    "verify:workbench": "node scripts/verify-workbench.mjs"
+    "verify:workbench": "node scripts/verify-workbench.mjs",
+    "demo": "node scripts/run-workbench.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.9.0",
