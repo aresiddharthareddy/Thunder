@@ -18,11 +18,11 @@ function hardware() {
   return { tier, gb, files: tier === 3 ? 6 : tier === 2 ? 2 : 1 };
 }
 
-async function inventory(extension, directory, allowed) {
+async function inventory(extension, directory, allowed, includeRestricted = false) {
   let catalogPath=path.join(extension,'catalog.json');
   if (!await fs.stat(catalogPath).catch(()=>null)) catalogPath=path.resolve(extension,'../../resources/models.json');
   const manifest = JSON.parse(await fs.readFile(catalogPath, 'utf8'));
-  const catalog = [...new Map([nano, ...manifest.models].map(m => [m.id, m])).values()].filter(m => ['MIT','Apache-2.0'].includes(m.license));
+  const catalog = [...new Map([nano, ...manifest.models].map(m => [m.id, m])).values()].filter(m => includeRestricted || ['MIT','Apache-2.0'].includes(m.license));
   const result = [];
   for (const model of catalog) {
     if (allowed && !allowed.includes(model.id)) continue;

@@ -14,7 +14,7 @@ class Services {
   get offline() { return vscode.workspace.getConfiguration('thunder').get('zeroOutbound',true); }
   get policy() { return this.state.get('policy',{}); }
   get tuning() { return this.pro ? this.state.get('tuning',{}) : {}; }
-  models() { return inventory(this.ctx.extensionPath,this.dir,this.policy.allowed); }
+  models() { return inventory(this.ctx.extensionPath,this.dir,this.policy.allowed,this.pro); }
   async init() {
     const user = await this.ctx.secrets.get('demo-session');
     if (user) await this.restore(user);
@@ -102,7 +102,7 @@ class Services {
   }
   async team() {
     if (!this.pro) throw new Error('Team policy requires an administrator.');
-    const all = await inventory(this.ctx.extensionPath,this.dir);
+    const all = await inventory(this.ctx.extensionPath,this.dir,undefined,true);
     const picked = await vscode.window.showQuickPick(all.map(m=>({label:m.displayName,id:m.id,picked:!this.policy.allowed||this.policy.allowed.includes(m.id)})),{title:'Approved models on this machine',canPickMany:true});
     if (picked) await this.state.update('policy',{...this.policy,allowed:picked.map(x=>x.id)});
   }
