@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react";
+import { Component, StrictMode, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import type { DiagnosticReport } from "../shared/diagnostics";
@@ -7,6 +7,17 @@ import { Workspace } from "./workspace/Workspace";
 
 function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+interface ErrorBoundaryState { error: Error | null; }
+class RendererErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null };
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo): void { console.error("Thunder renderer crashed", error, info.componentStack); }
+  render(): ReactNode {
+    if (!this.state.error) return this.props.children;
+    return <main className="app-shell crash-shell"><section className="card crash-card"><p className="eyebrow">THUNDER RECOVERY</p><h1>The workspace hit an unexpected error.</h1><p className="reason">{this.state.error.message || "The renderer stopped unexpectedly."}</p><div><button type="button" onClick={() => window.location.reload()}>Reload Thunder</button><button type="button" className="secondary-button" onClick={() => { this.setState({ error: null }); }}>Try again</button></div></section></main>;
+  }
 }
 
 function HardwareCard({ hardware }: { hardware: HardwareProfile }): JSX.Element {
@@ -137,4 +148,5 @@ function App(): JSX.Element {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
+const root = document.getElementById("root");
+if (root) createRoot(root).render(<StrictMode><RendererErrorBoundary><App /></RendererErrorBoundary></StrictMode>);

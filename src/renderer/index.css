@@ -44,6 +44,11 @@ button { border: 1px solid #3e8ee7; color: #dcecff; background: #173b68; border-
 button:hover { background: #1d4c82; }
 button:disabled { cursor: wait; opacity: .6; }
 .error { border: 1px solid #713e4d; color: #ffb4c0; background: #321c25; padding: 14px 16px; border-radius: 8px; }
+.crash-shell { min-height: 100%; display: grid; place-items: center; padding: 32px; }
+.crash-card { width: min(560px, 100%); }
+.crash-card h1 { font-size: 28px; }
+.crash-card button + button { margin-left: 8px; }
+.secondary-button { border-color: #344257; background: transparent; color: #aab8ca; }
 .saved { color: #55d39b; font-size: 12px; }
 .model-card { margin-top: 18px; }
 .pro-card { margin-top: 18px; }
