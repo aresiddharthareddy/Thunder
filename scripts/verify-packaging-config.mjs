@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 const config = await fs.readFile("electron-builder.yml", "utf8");
 const required = [
   "productName: Thunder",
+  "icon: resources/icon.png",
   "asar: true",
   "target: dmg",
   "arch: [arm64, x64]",

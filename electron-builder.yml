@@ -3,6 +3,7 @@ productName: Thunder
 directories:
   output: release
   buildResources: resources
+icon: resources/icon.png
 files:
   - dist/**/*
   - package.json
