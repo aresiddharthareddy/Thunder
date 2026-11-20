@@ -24,7 +24,9 @@ export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
   ipcMain.handle(CH.INFER_STREAM_START, async (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
     if (payload.input.length > 64_000 || (payload.context?.length ?? 0) > 32_000) throw new Error("Inference input is too large");
-    const mode = route(payload.input, (await detectHardware()).tier, payload.mode);
+    const hardware = await detectHardware();
+    const requestedMode = route(payload.input, hardware.tier, payload.mode);
+    const mode = capabilitiesFor(hardware.tier).modes.includes(requestedMode) ? requestedMode : "ask";
     const systemPrompt = mode === "agent" ? AGENT_SYSTEM_PROMPT : mode === "plan" ? PLAN_SYSTEM_PROMPT : ASK_SYSTEM_PROMPT;
     const streamKey = crypto.randomUUID(); const sender = event.sender;
     const emitEnd = (result: CompletionResult, error?: string) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_END, { streamKey, result, error }); active.delete(streamKey); };
