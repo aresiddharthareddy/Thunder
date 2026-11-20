@@ -15,14 +15,27 @@ import { classifyPath, redactSecrets } from "../../core/security.js";
 import { db } from "../db/index.js";
 const active = new Map<string, StreamHandle>();
 const modes = new Set(["ask", "plan", "agent"]);
+const FREE_MODEL_MAX_BYTES = 2_000_000_000;
 function requireMode(mode: unknown): "ask" | "plan" | "agent" | undefined {
   if (mode === undefined) return undefined;
   if (typeof mode !== "string" || !modes.has(mode)) throw new Error("Invalid inference mode");
   return mode as "ask" | "plan" | "agent";
 }
+function hasProEntitlement(): boolean {
+  const row = db.prepare("SELECT value FROM kv WHERE key = ?").get("entitlement") as { value: string } | undefined;
+  try {
+    const entitlement = row ? JSON.parse(row.value) as { tier?: string; expiresAt?: number | null } : null;
+    return entitlement?.tier === "pro" && (entitlement.expiresAt === null || (typeof entitlement.expiresAt === "number" && entitlement.expiresAt > Date.now()));
+  } catch { return false; }
+}
+function allowedModel(model: ReturnType<typeof readBundledCatalog>["models"][number], pro: boolean): boolean {
+  return pro || (["Apache-2.0", "MIT"].includes(model.license) && model.sizeBytes <= FREE_MODEL_MAX_BYTES);
+}
 async function installedModels(): Promise<ReturnType<typeof readBundledCatalog>["models"]> {
   const catalog = readBundledCatalog();
+  const pro = hasProEntitlement();
   return (await Promise.all(catalog.models.map(async (model) => {
+    if (!allowedModel(model, pro)) return null;
     try { await fs.access(path.join(defaultModelsDir(), `${model.id}.gguf`)); return model; } catch { return null; }
   }))).filter((model): model is typeof catalog.models[number] => model !== null);
 }
@@ -34,7 +47,7 @@ export function registerInferenceIpc(): void {
     const available = await installedModels();
     return chooseModel(payload.input, hardware.tier, available, mode);
   });
-  ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { if (typeof modelId !== "string") throw new Error("Model id must be text"); await loadModel(modelId); return { ok: true }; });
+  ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { if (typeof modelId !== "string") throw new Error("Model id must be text"); const model = readBundledCatalog().models.find((item) => item.id === modelId); if (!model || !allowedModel(model, hasProEntitlement())) throw new Error("Free Auto mode only uses the verified hardware-matched pack."); await loadModel(modelId); return { ok: true }; });
   ipcMain.handle(CH.INFER_STREAM_START, async (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
     if (!payload || typeof payload.input !== "string" || typeof payload.modelId !== "string" || (payload.context !== undefined && typeof payload.context !== "string")) throw new Error("Invalid inference request");
     const explicitMode = requireMode(payload.mode);

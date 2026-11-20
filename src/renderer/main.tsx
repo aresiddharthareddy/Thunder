@@ -126,7 +126,7 @@ function App(): JSX.Element {
   const compatibleModels = hardware ? models.filter((model) => model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2)) : models;
   const autoPackModels = compatibleModels.filter((model) => ["Apache-2.0", "MIT"].includes(model.license) && model.sizeBytes <= 2_000_000_000);
   const autoPackDownloaded = autoPackModels.filter((model) => model.downloaded).length;
-  const compatibleDownloaded = models.find((model) => model.downloaded && (model.tier <= (hardware?.tier ?? 1) || (hardware?.tier === 2.5 && model.tier <= 2)));
+  const compatibleDownloaded = (free ? autoPackModels : compatibleModels).find((model) => model.downloaded);
   return (
     workspace && hardware && compatibleDownloaded ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={compatibleDownloaded.id} tier={hardware.tier} free={entitlement?.tier !== "pro"} /></> :
     <main className="app-shell">
