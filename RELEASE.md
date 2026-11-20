@@ -1,6 +1,6 @@
 # Thunder release runbook
 
-1. Run `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build:main`, and `pnpm build:renderer`.
+1. Run `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build:main`, `pnpm build:renderer`, and `pnpm verify:packaging`.
 2. Run `pnpm package` on the target operating system.
 3. Run `pnpm verify:release` to create `release/SHA256SUMS.txt`.
 4. Complete `scripts/clean-machine-checklist.md` on a clean machine for each target.

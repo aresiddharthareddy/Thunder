@@ -41,3 +41,5 @@ jobs:
         run: npm run build:main
       - name: Build renderer
         run: npm run build:renderer
+      - name: Verify packaging targets
+        run: npm run verify:packaging
