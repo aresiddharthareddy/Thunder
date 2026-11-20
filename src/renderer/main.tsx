@@ -59,6 +59,14 @@ function App(): JSX.Element {
   const [workspace, setWorkspace] = useState(false);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [zeroOutbound, setZeroOutbound] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  async function refreshCatalog(): Promise<void> {
+    setCatalogLoading(true);
+    try { setModels(await window.thunder.catalog.list()); setError(null); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Model catalog could not be loaded"); }
+    finally { setCatalogLoading(false); }
+  }
 
   useEffect(() => {
     if (!window.thunder) {
@@ -68,14 +76,14 @@ function App(): JSX.Element {
     window.thunder.hardware.detect().then(setHardware).catch((reason: unknown) => {
       setError(reason instanceof Error ? reason.message : "Hardware scan failed");
     });
-    void window.thunder.catalog.list().then(setModels).catch(() => undefined);
+    void refreshCatalog();
     void window.thunder.entitlement.get().then(setEntitlement).catch(() => setEntitlement(null));
     void window.thunder.security.zeroOutbound.get().then(setZeroOutbound).catch(() => undefined);
     return window.thunder.catalog.onProgress((update) => setProgress((current) => ({ ...current, [update.modelId]: update })));
   }, []);
 
   async function download(modelId: string): Promise<void> {
-    try { await window.thunder.catalog.downloadStart(modelId); setModels(await window.thunder.catalog.list()); }
+    try { await window.thunder.catalog.downloadStart(modelId); await refreshCatalog(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Model download failed"); }
   }
   async function toggleDownload(modelId: string, downloading: boolean): Promise<void> { if (!downloading) { await download(modelId); return; } await window.thunder.catalog.downloadCancel(modelId); setProgress((current) => ({ ...current, [modelId]: { ...(current[modelId] ?? { modelId, downloadedBytes: 0, totalBytes: 0 }), phase: "error", error: "Paused" } })); }
@@ -93,8 +101,9 @@ function App(): JSX.Element {
     }
   }
 
+  const compatibleDownloaded = hardware ? models.find((model) => model.downloaded && (model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2))) : undefined;
   return (
-    workspace && hardware ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={models.find((model) => model.downloaded)?.id ?? "qwen2.5-coder-1.5b-q4"} tier={hardware.tier} /></> :
+    workspace && hardware && compatibleDownloaded ? <><header className="topbar"><div className="brand-mark">T</div><div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div><button className="workspace-back" type="button" onClick={() => setWorkspace(false)}>Back to setup</button></header><Workspace modelId={compatibleDownloaded.id} tier={hardware.tier} /></> :
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-mark">T</div>
@@ -115,14 +124,14 @@ function App(): JSX.Element {
         <section className="card model-card">
           <div className="card-heading"><div><p className="eyebrow">M2 · LOCAL MODELS</p><h2>Model catalog</h2></div><span className="model-count">{models.length} available</span></div>
           <p className="reason">Download a model locally when you are ready. Downloads are verified with SHA-256 before activation.</p>
-          <div className="model-list">{models.filter((model) => !hardware || model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2)).map((model) => { const update = progress[model.id]; const percent = update?.totalBytes ? Math.floor(update.downloadedBytes / update.totalBytes * 100) : 0; const restricted = !["Apache-2.0", "MIT"].includes(model.license) && entitlement?.tier !== "pro"; const downloading = update?.phase === "downloading"; return <div className="model-row" key={model.id}><div><strong>{model.displayName}</strong><span>{(model.sizeBytes / 1024 ** 3).toFixed(1)} GB · {model.license}</span>{update && <div className="progress"><i style={{ width: `${percent}%` }} /></div>}</div><button type="button" disabled={restricted || model.downloaded || update?.phase === "verifying"} onClick={() => void toggleDownload(model.id, downloading)}>{restricted ? "Pro only" : model.downloaded ? "Downloaded" : downloading ? "Pause" : update?.phase === "error" ? "Resume" : update ? `${update.phase} ${percent}%` : "Download"}</button></div>; })}</div>
+          <div className="model-list">{catalogLoading && <p className="reason">Loading verified catalog…</p>}{!catalogLoading && models.length === 0 && <button type="button" onClick={() => void refreshCatalog()}>Retry catalog</button>}{models.filter((model) => !hardware || model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2)).map((model) => { const update = progress[model.id]; const percent = update?.totalBytes ? Math.floor(update.downloadedBytes / update.totalBytes * 100) : 0; const restricted = !["Apache-2.0", "MIT"].includes(model.license) && entitlement?.tier !== "pro"; const downloading = update?.phase === "downloading"; return <div className="model-row" key={model.id}><div><strong>{model.displayName}</strong><span>{(model.sizeBytes / 1024 ** 3).toFixed(1)} GB · {model.license}</span>{update && <div className="progress"><i style={{ width: `${percent}%` }} /></div>}</div><button type="button" disabled={restricted || model.downloaded || update?.phase === "verifying"} onClick={() => void toggleDownload(model.id, downloading)}>{restricted ? "Pro only" : model.downloaded ? "Downloaded" : downloading ? "Pause" : update?.phase === "error" ? "Resume" : update ? `${update.phase} ${percent}%` : "Download"}</button></div>; })}</div>
         </section>
         <section className="doctor-row">
           <div><p className="eyebrow">DEVELOPER TOOLS</p><h3>Thunder Doctor</h3><p>Collect a local diagnostic report for troubleshooting. Nothing is uploaded.</p></div>
           <button type="button" onClick={() => void saveDiagnostics()} disabled={saving}>{saving ? "Saving…" : "Export diagnostics"}</button>
         </section>
         {report && <p className="saved">Diagnostic report collected successfully.</p>}
-        {models.some((model) => model.downloaded) && <button className="open-workspace" type="button" onClick={() => setWorkspace(true)}>Open coding workspace</button>}
+        {compatibleDownloaded && <button className="open-workspace" type="button" onClick={() => setWorkspace(true)}>Open coding workspace</button>}
       </div>
     </main>
   );
