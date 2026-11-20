@@ -18,7 +18,9 @@ export function mergeCatalog(bundled: Catalog, remote: Catalog): Catalog {
   const models = bundled.models.map((pinned) => {
     const candidate = remoteById.get(pinned.id);
     if (!candidate) return pinned;
-    return { ...pinned, displayName: candidate.displayName, quant: candidate.quant, license: candidate.license, contextLength: candidate.contextLength, tier: candidate.tier, roles: candidate.roles };
+    // Remote data may improve presentation metadata, but never changes the
+    // pinned binary identity or execution policy of a bundled model.
+    return { ...pinned, displayName: candidate.displayName };
   });
   return { schemaVersion: bundled.schemaVersion, models };
 }
