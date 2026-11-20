@@ -1,0 +1,35 @@
+import { describe, expect, it } from "vitest";
+import { chooseModel, route } from "../../src/core/router";
+import { runAgent } from "../../src/core/agent";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const models = [
+  { id: "nano", displayName: "Nano", repo: "x", file: "x", quant: "Q4", sizeBytes: 1, sha256: "a".repeat(64), license: "MIT", contextLength: 1024, tier: 1 as const, roles: ["router", "ask"] },
+  { id: "agent", displayName: "Agent", repo: "x", file: "x", quant: "Q4", sizeBytes: 2, sha256: "b".repeat(64), license: "MIT", contextLength: 2048, tier: 2 as const, roles: ["plan", "agent"] }
+];
+
+describe("smart routing", () => {
+  it("detects intent and selects the smallest compatible model", () => {
+    expect(route("fix the failing test", 2)).toBe("agent");
+    expect(chooseModel("explain this function", 1, models).modelId).toBe("nano");
+  });
+});
+
+describe("agent execution", () => {
+  it("applies an exact replacement inside the workspace", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    await fs.writeFile(path.join(root, "demo.ts"), "const answer = 1;\n");
+    const result = await runAgent([{ kind: "search_replace", payload: { file: "demo.ts", search: "const answer = 1;", replace: "const answer = 42;" } }], { workspaceRoot: root, maxSteps: 3, maxFiles: 1, timeoutMs: 1000, allowWrites: true });
+    expect(result.status).toBe("completed");
+    expect(await fs.readFile(path.join(root, "demo.ts"), "utf8")).toContain("42");
+  });
+
+  it("rejects paths outside the workspace", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    const result = await runAgent([{ kind: "read", payload: { file: "../secret" } }], { workspaceRoot: root, maxSteps: 3, maxFiles: 1, timeoutMs: 1000, allowWrites: false });
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("escapes workspace");
+  });
+});
