@@ -19,6 +19,9 @@ describe("smart routing", () => {
   it("never selects a model above the detected hardware tier", () => {
     expect(chooseModel("explain this function", 1, [{ ...models[1], roles: ["ask"] }]).modelId).toBeNull();
   });
+  it("treats legacy edit-role models as Agent-capable", () => {
+    expect(chooseModel("implement the fix", 2, [{ ...models[1], roles: ["edit"] }]).modelId).toBe("agent");
+  });
 });
 
 describe("agent execution", () => {

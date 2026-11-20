@@ -34,7 +34,8 @@ export function registerInferenceIpc(): void {
     const mode = capabilitiesFor(hardware.tier).modes.includes(requestedMode) ? requestedMode : "ask";
     const available = await installedModels();
     const selected = available.find((model) => model.id === payload.modelId);
-    if (!selected || selected.tier > hardware.tier || (!selected.roles.includes(mode) && !selected.roles.includes("router"))) {
+    const supportsMode = selected && (selected.roles.includes(mode) || (mode === "agent" && selected.roles.includes("edit")) || selected.roles.includes("router"));
+    if (!selected || selected.tier > hardware.tier || !supportsMode) {
       throw new Error(`Model ${payload.modelId} is not installed or is incompatible with tier ${hardware.tier} and mode ${mode}`);
     }
     const systemPrompt = mode === "agent" ? AGENT_SYSTEM_PROMPT : mode === "plan" ? PLAN_SYSTEM_PROMPT : ASK_SYSTEM_PROMPT;

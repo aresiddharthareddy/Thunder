@@ -9,6 +9,10 @@ export interface RouteDecision {
 
 const agentSignals = /\b(edit|fix|implement|refactor|rename|create|delete|add|remove|update|build|run tests?|make changes?)\b/i;
 const planSignals = /\b(plan|design|architecture|steps?|approach|how should|break down)\b/i;
+function supportsMode(model: CatalogModel, mode: Mode): boolean {
+  // Older catalog entries call Agent-capable editing models "edit".
+  return model.roles.includes(mode) || (mode === "agent" && model.roles.includes("edit")) || model.roles.includes("router");
+}
 
 export function route(input: string, tier: number, explicitMode?: Mode): Mode {
   if (explicitMode) return explicitMode;
@@ -19,10 +23,10 @@ export function route(input: string, tier: number, explicitMode?: Mode): Mode {
 
 export function chooseModel(input: string, tier: HardwareTier, models: CatalogModel[], explicitMode?: Mode): RouteDecision {
   const mode = route(input, tier, explicitMode);
-  const candidates = models.filter((model) => model.tier <= tier && model.roles.some((role) => role === mode || role === "router"));
+  const candidates = models.filter((model) => model.tier <= tier && supportsMode(model, mode));
   const ranked = [...candidates].sort((a, b) => {
-    const aMode = a.roles.includes(mode) ? 1 : 0;
-    const bMode = b.roles.includes(mode) ? 1 : 0;
+    const aMode = supportsMode(a, mode) && a.roles.includes(mode) ? 1 : 0;
+    const bMode = supportsMode(b, mode) && b.roles.includes(mode) ? 1 : 0;
     return bMode - aMode || a.sizeBytes - b.sizeBytes;
   });
   const selected = ranked[0] ?? null;
