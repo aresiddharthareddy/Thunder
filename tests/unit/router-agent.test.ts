@@ -33,6 +33,11 @@ describe("smart routing", () => {
     expect(chooseModel("implement the fix", 2, [freeAgent, strongerAgent]).modelId).toBe("strong-agent");
     expect(chooseModel("explain this function", 2, [freeAgent, strongerAgent]).modelId).toBe("free-agent");
   });
+  it("keeps Tier 1 Agent on the nano model for memory safety", () => {
+    const nanoAgent = { ...models[0], id: "nano-agent", roles: ["router", "ask", "agent"], sizeBytes: 1 };
+    const largerAgent = { ...models[1], id: "larger-agent", sizeBytes: 10 };
+    expect(chooseModel("implement the fix", 1, [nanoAgent, largerAgent]).modelId).toBe("nano-agent");
+  });
 });
 
 describe("agent execution", () => {

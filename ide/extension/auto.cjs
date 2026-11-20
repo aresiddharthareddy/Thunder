@@ -43,8 +43,8 @@ function routes(models, hw, mode, input, pin) {
   if (pinned) return [pinned];
   const complex = /\b(architect\w*|design|refactor|across|migrate|security|multiple|debug|why)\b/i.test(input) || input.length > 500;
   const small = fit[0];
-  const coder = fit.find(m => m.sizeBytes >= 1e9) || small;
-  const strong = fit.filter(m => m.sizeBytes <= hw.gb * 2 ** 30 * .45).at(-1) || coder;
+  const coder = hw.tier === 1 ? small : fit.find(m => m.sizeBytes >= 1e9) || small;
+  const strong = hw.tier === 1 ? small : fit.filter(m => m.sizeBytes <= hw.gb * 2 ** 30 * .45).at(-1) || coder;
   if (complex && strong !== small) return [small, strong];
   return [mode === 'ask' ? small : coder];
 }

@@ -30,7 +30,8 @@ export function chooseModel(input: string, tier: HardwareTier, models: CatalogMo
     // Ask/autocomplete favor the smallest model. Structured planning and
     // edits favor the strongest installed model that still fits the tier;
     // this keeps Free responsive while giving Agent enough reasoning room.
-    const strength = mode === "agent" || mode === "plan" ? b.sizeBytes - a.sizeBytes : a.sizeBytes - b.sizeBytes;
+    const preferStrength = tier >= 2 && (mode === "agent" || mode === "plan");
+    const strength = preferStrength ? b.sizeBytes - a.sizeBytes : a.sizeBytes - b.sizeBytes;
     return bMode - aMode || strength;
   });
   const selected = ranked[0] ?? null;
