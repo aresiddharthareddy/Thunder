@@ -11,7 +11,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { CompletionResult } from "../../core/inference.js";
 import { runAgent } from "../../core/agent.js";
-import { classifyPath } from "../../core/security.js";
+import { classifyPath, redactSecrets } from "../../core/security.js";
 import { db } from "../db/index.js";
 const active = new Map<string, StreamHandle>();
 export function registerInferenceIpc(): void {
@@ -27,7 +27,8 @@ export function registerInferenceIpc(): void {
     const systemPrompt = mode === "agent" ? AGENT_SYSTEM_PROMPT : mode === "plan" ? PLAN_SYSTEM_PROMPT : ASK_SYSTEM_PROMPT;
     const streamKey = crypto.randomUUID(); const sender = event.sender;
     const emitEnd = (result: CompletionResult, error?: string) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_END, { streamKey, result, error }); active.delete(streamKey); };
-    const handle = startStream({ modelId: payload.modelId, systemPrompt, userMessage: payload.input, context: payload.context ?? "", phase: mode === "ask" ? "planning" : "edit-gen", maxTokens: mode === "agent" ? 1024 : mode === "plan" ? 768 : 512, onToken: (text) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_TOKEN, { streamKey, text }); }, onEnd: (result) => emitEnd(result), onError: (error) => emitEnd({ text: "", tokensIn: 0, tokensOut: 0, msPlanning: 0, msEditGen: 0 }, error.message) }); active.set(streamKey, handle); return { streamKey };
+    const safeContext = (await redactSecrets(payload.context ?? "")).text;
+    const handle = startStream({ modelId: payload.modelId, systemPrompt, userMessage: payload.input, context: safeContext, phase: mode === "ask" ? "planning" : "edit-gen", maxTokens: mode === "agent" ? 1024 : mode === "plan" ? 768 : 512, onToken: (text) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_TOKEN, { streamKey, text }); }, onEnd: (result) => emitEnd(result), onError: (error) => emitEnd({ text: "", tokensIn: 0, tokensOut: 0, msPlanning: 0, msEditGen: 0 }, error.message) }); active.set(streamKey, handle); return { streamKey };
   });
   ipcMain.handle(CH.INFER_STREAM_CANCEL, (_event, streamKey: string) => { const handle = active.get(streamKey); if (!handle) return { aborted: false }; handle.abort(); return { aborted: true }; });
   ipcMain.handle(CH.AGENT_RUN, async (_event, payload: { plan: import("../../core/agent.js").AgentPlanStep[]; workspaceRoot: string; allowWrites: boolean }) => {
