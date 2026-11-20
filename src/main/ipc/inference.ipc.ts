@@ -5,7 +5,7 @@ import { startStream, loadModel, type StreamHandle } from "../../core/inference.
 import { AGENT_SYSTEM_PROMPT, ASK_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT } from "../../core/prompts.js";
 import { route } from "../../core/router.js";
 import { chooseModel } from "../../core/router.js";
-import { detectHardware } from "../../core/hardware.js";
+import { capabilitiesFor, detectHardware } from "../../core/hardware.js";
 import { defaultModelsDir, readBundledCatalog } from "../../core/catalog.js";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -32,6 +32,8 @@ export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_STREAM_CANCEL, (_event, streamKey: string) => { const handle = active.get(streamKey); if (!handle) return { aborted: false }; handle.abort(); return { aborted: true }; });
   ipcMain.handle(CH.AGENT_RUN, async (_event, payload: { plan: import("../../core/agent.js").AgentPlanStep[]; workspaceRoot: string; allowWrites: boolean }) => {
     if (!payload.workspaceRoot || !Array.isArray(payload.plan)) throw new Error("Invalid agent request");
+    const hardware = await detectHardware(); const capabilities = capabilitiesFor(hardware.tier);
+    if (!capabilities.modes.includes("agent")) throw new Error(`Agent mode is unavailable on hardware tier ${hardware.tier}`);
     for (const item of payload.plan) {
       if (item.kind !== "search_replace") continue;
       const file = (item.payload as { file?: unknown }).file;
@@ -39,7 +41,7 @@ export function registerInferenceIpc(): void {
       const decision = classifyPath(file, "write", { workspaceRoot: payload.workspaceRoot });
       if (decision.action !== "allow") throw new Error(`Agent write blocked: ${decision.reason}`);
     }
-    const result = await runAgent(payload.plan, { workspaceRoot: payload.workspaceRoot, maxSteps: 32, maxFiles: 8, timeoutMs: 300_000, allowWrites: payload.allowWrites });
+    const result = await runAgent(payload.plan, { workspaceRoot: payload.workspaceRoot, maxSteps: Math.max(8, capabilities.maxFilesPerAgentRun * 4), maxFiles: capabilities.maxFilesPerAgentRun, timeoutMs: capabilities.agentStepTimeoutMs, allowWrites: payload.allowWrites });
     db.prepare("INSERT INTO audit_log (ts, event, detail_json) VALUES (?, ?, ?)").run(Date.now(), "agent.run", JSON.stringify({ taskId: result.taskId, status: result.status, changedFiles: result.changedFiles, error: result.error ?? null }));
     return result;
   });
