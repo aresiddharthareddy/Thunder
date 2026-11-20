@@ -68,6 +68,7 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
       if (stored.tier === "pro" && (stored.expiresAt === null || stored.expiresAt > Date.now())) entitlement = stored;
     } catch { entitlement = freeEntitlement(); }
   }
+  const recentLogLines = (db.prepare("SELECT event, detail_json FROM audit_log ORDER BY ts DESC LIMIT 200").all() as Array<{ event: string; detail_json: string }>).map((row) => `${row.event} ${row.detail_json}`);
 
   return {
     generatedAt: Date.now(),
@@ -81,7 +82,7 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
     entitlement,
     securityRulesetHash: securityRulesetHash(),
     freeDiskBytes: hardware.freeDiskBytes,
-    recentLogLines: [],
+    recentLogLines,
     recentAgentSteps,
   };
 }
