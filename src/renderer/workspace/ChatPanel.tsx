@@ -7,7 +7,7 @@ function parsePlan(text: string): AgentPlanStep[] { const source = text.match(/`
 
 export function ChatPanel({ modelId, workspaceRoot, filePath: _filePath, context, onRefresh }: Props): JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]); const [input, setInput] = useState(""); const [mode, setMode] = useState<"ask" | "plan" | "agent">("ask"); const [busy, setBusy] = useState(false); const [pendingPlan, setPendingPlan] = useState<AgentPlanStep[] | null>(null); const active = useRef<string | null>(null); const session = useRef<string | null>(null);
-  useEffect(() => { void window.thunder.chat.createSession({ mode }).then((result) => { session.current = result.id; }); }, [mode]);
+  useEffect(() => { void window.thunder.chat.latest({ mode }).then((latest) => { if (latest) { session.current = latest.id; setMessages(latest.messages.filter((message): message is Message => message.role === "user" || message.role === "assistant")); } else return window.thunder.chat.createSession({ mode }).then((result) => { session.current = result.id; }); }); }, [mode]);
   const persistedAssistant = useRef(0);
   useEffect(() => { const finalized = messages.filter((message) => message.role === "assistant" && !message.streaming); if (session.current && finalized.length > persistedAssistant.current) { const message = finalized[finalized.length - 1]; persistedAssistant.current = finalized.length; void window.thunder.chat.append({ sessionId: session.current, role: "assistant", content: message.content }); } }, [messages]);
   const persistedUser = useRef(0);

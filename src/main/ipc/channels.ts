@@ -15,6 +15,7 @@ export const CH = {
   AGENT_RUN: "agent:run",
   CHAT_SESSION_CREATE: "chat:session:create",
   CHAT_MESSAGE_APPEND: "chat:message:append",
+  CHAT_SESSION_LATEST: "chat:session:latest",
   FILE_READ: "file:read",
   FILE_OPEN: "file:open",
   FILE_TREE: "file:tree",

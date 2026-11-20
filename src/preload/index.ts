@@ -59,6 +59,7 @@ const api = {
   },
   chat: {
     createSession: (payload: { mode: Mode; title?: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_SESSION_CREATE, payload) as Promise<{ id: string }>,
+    latest: (payload: { mode: Mode }): Promise<{ id: string; title: string; mode: Mode; messages: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> } | null> => ipcRenderer.invoke(CH.CHAT_SESSION_LATEST, payload) as Promise<{ id: string; title: string; mode: Mode; messages: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> } | null>,
     append: (payload: { sessionId: string; role: "user" | "assistant" | "system" | "tool"; content: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_MESSAGE_APPEND, payload) as Promise<{ id: string }>,
   },
 };
