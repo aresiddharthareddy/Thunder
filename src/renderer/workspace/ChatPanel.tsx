@@ -39,11 +39,15 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
   const [busy, setBusy] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<AgentPlanStep[] | null>(null);
   const active = useRef<string | null>(null);
+  const responseTimeout = useRef<number | null>(null);
   const session = useRef<string | null>(null);
   const lastRequest = useRef<string | null>(null);
   const agentRetries = useRef(0);
   const persistedUser = useRef(0);
   const persistedAssistant = useRef(0);
+
+  function clearResponseTimeout(): void { if (responseTimeout.current !== null) { window.clearTimeout(responseTimeout.current); responseTimeout.current = null; } }
+  function armResponseTimeout(): void { clearResponseTimeout(); responseTimeout.current = window.setTimeout(() => { void cancel("Local inference timed out. Run Thunder Doctor and retry with a smaller context."); }, mode === "agent" ? 90_000 : 120_000); }
 
   function restore(loaded: { id: string; messages: Array<{ role: string; content: string }> }): void {
     session.current = loaded.id;
@@ -75,6 +79,7 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
     await window.thunder.inference.load(decision.modelId);
     const result = await window.thunder.inference.streamStart({ input: request, modelId: decision.modelId, mode: requestMode, context: `<file>${filePath}</file>\n<content>\n${context}\n</content>` });
     active.current = result.streamKey;
+    armResponseTimeout();
   }
 
   async function retryAgent(reason: string): Promise<void> {
@@ -85,7 +90,7 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
     try {
       await startInference(`${original}\n\nThe previous proposal was rejected because: ${reason}. Return only the required JSON object with at least one safe read or search_replace step.`, "agent");
     } catch (error) {
-      active.current = null; setBusy(false); lastRequest.current = null;
+      active.current = null; clearResponseTimeout(); setBusy(false); lastRequest.current = null;
       setMessages((items) => items.map((item, index) => index === items.length - 1 ? { role: "assistant", content: `[error] ${error instanceof Error ? error.message : String(error)}` } : item));
     }
   }
@@ -93,6 +98,7 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
   useEffect(() => {
     const offToken = window.thunder.inference.onToken((event) => {
       if (event.streamKey !== active.current) return;
+      clearResponseTimeout();
       setMessages((items) => { const next = [...items]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, content: last.content + event.text }; return next; });
     });
     const offEnd = window.thunder.inference.onEnd((event) => {
@@ -106,7 +112,7 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
       setMessages((items) => { const next = [...items]; const last = next[next.length - 1]; if (last) next[next.length - 1] = { ...last, streaming: false, content: output || last.content || "No response returned." }; return next; });
       setPendingPlan(plan);
     });
-    return () => { offToken(); offEnd(); };
+    return () => { offToken(); offEnd(); clearResponseTimeout(); };
   }, [mode, filePath, context]);
 
   async function newChat(): Promise<void> { if (busy) return; const created = await window.thunder.chat.createSession({ mode }); session.current = created.id; persistedUser.current = 0; persistedAssistant.current = 0; setMessages([]); setPendingPlan(null); setSessions(await window.thunder.chat.list({ mode })); }
@@ -117,7 +123,7 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
     setMessages((items) => [...items, { role: "user", content: text }, { role: "assistant", content: "", streaming: true }]);
     if (identityQuestion.test(text)) { setMessages((items) => [...items.slice(0, -1), { role: "assistant", content: "I'm Thunder Agent, your local coding assistant." }]); setBusy(false); lastRequest.current = null; return; }
     try { await startInference(text); }
-    catch (error) { setBusy(false); lastRequest.current = null; setMessages((items) => [...items.slice(0, -1), { role: "assistant", content: `[error] ${error instanceof Error ? error.message : String(error)}` }]); }
+    catch (error) { clearResponseTimeout(); setBusy(false); lastRequest.current = null; setMessages((items) => [...items.slice(0, -1), { role: "assistant", content: `[error] ${error instanceof Error ? error.message : String(error)}` }]); }
   }
   async function applyPlan(): Promise<void> {
     if (!pendingPlan || !workspaceRoot) return;
@@ -126,7 +132,13 @@ export function ChatPanel({ modelId, tier, free, workspaceRoot, filePath, contex
     catch (error) { setMessages((items) => [...items, { role: "assistant", content: `[error] ${error instanceof Error ? error.message : String(error)}` }]); }
     finally { setBusy(false); }
   }
-  async function cancel(): Promise<void> { if (active.current) await window.thunder.inference.streamCancel(active.current); }
+  async function cancel(message = "Cancelled."): Promise<void> {
+    const streamKey = active.current;
+    clearResponseTimeout();
+    if (streamKey) await window.thunder.inference.streamCancel(streamKey);
+    active.current = null; lastRequest.current = null; setBusy(false);
+    setMessages((items) => items.map((item, index) => index === items.length - 1 && item.role === "assistant" ? { ...item, streaming: false, content: item.content || message } : item));
+  }
 
   return <section className="chat-panel">
     <div className="chat-header"><span>Thunder Assistant</span><div><small>{free ? "Auto" : modelId} · Tier {tier}</small><button className="new-chat" type="button" onClick={() => void newChat()} disabled={busy}>New chat</button></div></div>
