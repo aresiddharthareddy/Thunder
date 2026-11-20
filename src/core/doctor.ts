@@ -3,6 +3,8 @@ import { db } from "../main/db/index.js";
 import { detectHardware } from "./hardware.js";
 import type { DiagnosticReport, CachedModelInfo } from "../shared/diagnostics.js";
 import type { AgentStep } from "../shared/types.js";
+import { freeEntitlement } from "./entitlements.js";
+import { securityRulesetHash } from "./security.js";
 
 export async function collectDiagnostics(): Promise<DiagnosticReport> {
   const hardware = await detectHardware();
@@ -67,21 +69,8 @@ export async function collectDiagnostics(): Promise<DiagnosticReport> {
     hardware,
     cachedModels,
     activeModelId: null,
-    entitlement: {
-      tier: "free",
-      plan: "none",
-      expiresAt: null,
-      offlineGraceUntil: 0,
-      features: {
-        modelLab: false,
-        manualPin: false,
-        perfTuning: false,
-        byokFallback: false,
-        teamPolicy: false,
-        diagnosticBundle: false,
-      },
-    },
-    securityRulesetHash: "pending-m4",
+    entitlement: freeEntitlement(),
+    securityRulesetHash: securityRulesetHash(),
     freeDiskBytes: hardware.freeDiskBytes,
     recentLogLines: [],
     recentAgentSteps,

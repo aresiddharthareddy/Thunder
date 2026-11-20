@@ -11,6 +11,7 @@ import { registerSecurityIpc } from "./ipc/security.ipc.js";
 import { registerFilesIpc } from "./ipc/files.ipc.js";
 import { registerChatIpc } from "./ipc/chat.ipc.js";
 import { registerTerminalIpc } from "./ipc/terminal.ipc.js";
+import { registerEntitlementIpc } from "./ipc/entitlement.ipc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +45,7 @@ app.whenReady().then(() => {
   registerFilesIpc();
   registerChatIpc();
   registerTerminalIpc();
+  registerEntitlementIpc();
   const row = db.prepare("SELECT value FROM kv WHERE key = ?").get("zero_outbound") as { value: string } | undefined;
   setZeroOutbound(row?.value === "true");
   createWindow();
