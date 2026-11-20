@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chooseModel, route } from "../../src/core/router";
-import { runAgent } from "../../src/core/agent";
+import { parseAgentPlan, runAgent } from "../../src/core/agent";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +18,10 @@ describe("smart routing", () => {
 });
 
 describe("agent execution", () => {
+  it("parses and validates structured plans", () => {
+    expect(parseAgentPlan('```json\n{"steps":[{"kind":"read","payload":{"file":"src/a.ts"}}]}\n```')).toHaveLength(1);
+    expect(() => parseAgentPlan('{"steps":[{"kind":"read","payload":{"file":"/etc/passwd"}}]}')).toThrow("Unsafe path");
+  });
   it("applies an exact replacement inside the workspace", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
     await fs.writeFile(path.join(root, "demo.ts"), "const answer = 1;\n");

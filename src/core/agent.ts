@@ -14,6 +14,22 @@ export interface AgentPolicy {
 export interface AgentPlanStep { kind: AgentStepKind; payload: unknown; }
 export interface AgentRunResult { taskId: string; status: "completed" | "failed" | "aborted"; steps: AgentStep[]; changedFiles: string[]; error?: string; }
 
+export function parseAgentPlan(text: string): AgentPlanStep[] {
+  const candidate = text.match(/```json\s*([\s\S]*?)```/i)?.[1] ?? text;
+  let parsed: unknown;
+  try { parsed = JSON.parse(candidate.trim()); } catch { throw new Error("Agent returned invalid JSON"); }
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { steps?: unknown }).steps)) throw new Error("Agent response must contain a steps array");
+  return (parsed as { steps: unknown[] }).steps.map((item, index) => {
+    if (!item || typeof item !== "object" || typeof (item as { kind?: unknown }).kind !== "string" || !("payload" in item)) throw new Error(`Invalid agent step ${index + 1}`);
+    const kind = (item as unknown as { kind: string }).kind;
+    if (!["plan", "read", "search_replace", "finish"].includes(kind)) throw new Error(`Unsupported agent step ${index + 1}: ${kind}`);
+    const payload = (item as { payload: unknown }).payload;
+    if ((kind === "read" || kind === "search_replace") && (!payload || typeof payload !== "object" || typeof (payload as { file?: unknown }).file !== "string" || path.isAbsolute((payload as { file: string }).file))) throw new Error(`Unsafe path in agent step ${index + 1}`);
+    if (kind === "search_replace" && (typeof (payload as { search?: unknown }).search !== "string" || typeof (payload as { replace?: unknown }).replace !== "string")) throw new Error(`Invalid replacement in agent step ${index + 1}`);
+    return { kind: kind as AgentStepKind, payload };
+  });
+}
+
 function safePath(root: string, file: string): string {
   const resolved = path.resolve(root, file);
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error(`Path escapes workspace: ${file}`);
