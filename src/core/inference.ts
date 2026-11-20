@@ -40,7 +40,7 @@ const AGENT_RESPONSE_SCHEMA = {
   },
   required: ["explanation", "steps"],
 } as const;
-async function getRuntime(): Promise<Llama> { llama ??= getLlama({ gpu: "auto" }); return llama; }
+async function getRuntime(): Promise<Llama> { llama ??= getLlama({ gpu: "auto", build: "never", skipDownload: true, progressLogs: false }); return llama; }
 export async function loadModel(modelId: string): Promise<LlamaModel> {
   if (!/^[a-z0-9.-]+$/.test(modelId)) throw new Error("Invalid model id");
   const cached = loaded.get(modelId); if (cached) return cached.model;
