@@ -79,4 +79,4 @@ jobs:
         run: pnpm exec electron-builder ${{ matrix.args }} --publish never
       - name: Verify packaged output exists
         shell: bash
-        run: test -d release || test -d "release\\"
+        run: pnpm run verify:artifact -- ${{ matrix.target }}

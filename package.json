@@ -18,7 +18,8 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
     "verify:hashes": "tsx scripts/verify-hashes.ts",
     "verify:release": "node scripts/verify-release.mjs"
-    ,"verify:packaging": "node scripts/verify-packaging-config.mjs"
+    ,"verify:packaging": "node scripts/verify-packaging-config.mjs",
+    "verify:artifact": "node scripts/verify-artifact.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.9.0",
