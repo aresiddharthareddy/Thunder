@@ -13,11 +13,11 @@ pnpm build
 pnpm dev
 ```
 
-The first-run catalog lists pinned GGUF models. Download a model from the onboarding screen, then open the coding workspace. Model downloads are resumable and SHA-256 verified before activation.
+The first-run catalog lists pinned GGUF models. Free users prepare a hardware-matched Auto pack containing a nano model and a lightweight coder model; Thunder keeps model selection automatic. Pro users can use Model Lab controls in the Workbench. Downloads are resumable and SHA-256 verified before activation.
 
 ## Agent safety
 
-Agent mode produces a structured plan, shows an explicit review step, and only applies edits after the user selects **Apply safely**. Writes are restricted to the selected workspace, exact replacement matches are required, and failed runs roll back earlier edits. Agent runs are recorded in the local SQLite audit log.
+Agent mode uses grammar-constrained JSON, retries one malformed proposal, shows an explicit diff review step, and only applies edits after the user selects **Apply safely**. Writes are restricted to the selected workspace, exact replacement matches and syntax checks are required, and failed runs roll back earlier edits. Agent runs are recorded in the local SQLite audit log.
 
 ## Packaging
 
@@ -40,4 +40,4 @@ Inference, editor context, chat history, model files, and Agent audit records st
 
 ## Scope
 
-Thunder currently focuses on local model inference, secure file editing, model routing, Agent review/apply, offline diagnostics, and explicitly approved workspace-scoped terminal commands. Terminal commands are bounded, output-limited, and reject destructive or pipe-to-shell patterns. Auto-update, cloud fallback, and telemetry upload are intentionally not enabled.
+Thunder currently focuses on local model inference, secure file editing, hardware-aware model routing, Agent review/apply, offline diagnostics, and explicitly approved workspace-scoped terminal commands. Terminal commands are bounded, output-limited, and reject destructive or pipe-to-shell patterns. The Workbench exposes Pro BYOK cloud reasoning only after an explicit account, network, and per-request approval; telemetry upload and silent auto-update are not enabled.

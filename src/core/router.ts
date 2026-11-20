@@ -27,7 +27,11 @@ export function chooseModel(input: string, tier: HardwareTier, models: CatalogMo
   const ranked = [...candidates].sort((a, b) => {
     const aMode = supportsMode(a, mode) && a.roles.includes(mode) ? 1 : 0;
     const bMode = supportsMode(b, mode) && b.roles.includes(mode) ? 1 : 0;
-    return bMode - aMode || a.sizeBytes - b.sizeBytes;
+    // Ask/autocomplete favor the smallest model. Structured planning and
+    // edits favor the strongest installed model that still fits the tier;
+    // this keeps Free responsive while giving Agent enough reasoning room.
+    const strength = mode === "agent" || mode === "plan" ? b.sizeBytes - a.sizeBytes : a.sizeBytes - b.sizeBytes;
+    return bMode - aMode || strength;
   });
   const selected = ranked[0] ?? null;
   return {

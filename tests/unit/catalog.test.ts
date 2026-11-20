@@ -13,6 +13,10 @@ describe("bundled model catalog", () => {
       expect(model.sizeBytes).toBeGreaterThan(0);
       expect(model.roles.length).toBeGreaterThan(0);
     }
+    const nano = catalog.models.find((model) => model.id === "qwen2.5-coder-0.5b-q4");
+    const freeCoder = catalog.models.find((model) => model.id === "qwen2.5-coder-1.5b-q4");
+    expect(nano?.roles).toContain("agent");
+    expect(freeCoder?.roles).toContain("agent");
   });
   it("allows remote metadata only for bundled pinned identities", () => {
     const bundled = JSON.parse(fs.readFileSync("resources/models.json", "utf8")) as { schemaVersion: number; models: Array<Record<string, unknown>> };

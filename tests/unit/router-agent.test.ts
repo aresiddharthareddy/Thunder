@@ -27,6 +27,12 @@ describe("smart routing", () => {
   it("treats legacy edit-role models as Agent-capable", () => {
     expect(chooseModel("implement the fix", 2, [{ ...models[1], roles: ["edit"] }]).modelId).toBe("agent");
   });
+  it("uses the strongest installed Agent-capable model while keeping Ask small", () => {
+    const freeAgent = { ...models[0], id: "free-agent", roles: ["router", "ask", "agent"], sizeBytes: 1 };
+    const strongerAgent = { ...models[1], id: "strong-agent", sizeBytes: 10 };
+    expect(chooseModel("implement the fix", 2, [freeAgent, strongerAgent]).modelId).toBe("strong-agent");
+    expect(chooseModel("explain this function", 2, [freeAgent, strongerAgent]).modelId).toBe("free-agent");
+  });
 });
 
 describe("agent execution", () => {

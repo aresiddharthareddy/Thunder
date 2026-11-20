@@ -69,6 +69,8 @@ button:disabled { cursor: wait; opacity: .6; }
 .model-row strong, .model-row span { display: block; }
 .model-row strong { font-size: 13px; font-weight: 600; }
 .model-row span { color: #7e8da2; font-size: 11px; margin-top: 4px; }
+.auto-pack-list { margin-top: 14px; }
+.auto-status { color: #77e0c5 !important; white-space: nowrap; margin-top: 0 !important; }
 .progress { height: 4px; width: 240px; margin-top: 8px; background: #273143; border-radius: 4px; overflow: hidden; }
 .progress i { display: block; height: 100%; background: #70b1ff; }
 .open-workspace { margin-top: 18px; width: 100%; padding: 13px; }
@@ -95,9 +97,11 @@ button:disabled { cursor: wait; opacity: .6; }
 .message.assistant { background: #151d29; }
 .message small { display: block; margin-bottom: 6px; color: #7f91a8; font-size: 10px; text-transform: uppercase; }
 .agent-review { margin: 10px 12px; padding: 10px; border: 1px solid #4d6c83; border-radius: 8px; background: #142331; font-size: 11px; }
+.review-note { color: #9eb0c5; margin: 6px 0; font-size: 10px; }
 .agent-review ul { margin: 8px 0; padding-left: 16px; color: #b5c6d8; max-height: 120px; overflow: auto; }
 .agent-review li { margin: 4px 0; }
 .agent-review code { color: #77e0c5; }
+.agent-review pre { margin: 5px 0 8px; padding: 7px; max-height: 90px; overflow: auto; background: #0b1118; color: #bcd0df; border-radius: 5px; white-space: pre-wrap; font: 10px/1.35 "JetBrains Mono", monospace; }
 .agent-review small { color: #8194a8; }
 .agent-actions { display: flex; gap: 7px; }
 .composer { padding: 12px; border-top: 1px solid #293342; }

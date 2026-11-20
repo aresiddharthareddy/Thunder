@@ -11,6 +11,35 @@ let llama: Promise<Llama> | null = null;
 const loaded = new Map<string, Loaded>();
 const loading = new Map<string, Promise<LlamaModel>>();
 let sequence = 0;
+const AGENT_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    explanation: { type: "string" },
+    steps: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: { type: "string", enum: ["read", "search_replace"] },
+          payload: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              file: { type: "string" },
+              search: { type: "string" },
+              replace: { type: "string" },
+            },
+            required: ["file"],
+          },
+        },
+        required: ["kind", "payload"],
+      },
+    },
+  },
+  required: ["explanation", "steps"],
+} as const;
 async function getRuntime(): Promise<Llama> { llama ??= getLlama({ gpu: "auto" }); return llama; }
 export async function loadModel(modelId: string): Promise<LlamaModel> {
   if (!/^[a-z0-9.-]+$/.test(modelId)) throw new Error("Invalid model id");
@@ -29,8 +58,8 @@ export async function loadModel(modelId: string): Promise<LlamaModel> {
   try { return await request; } finally { loading.delete(modelId); }
 }
 export async function unloadModel(modelId: string): Promise<void> { const item = loaded.get(modelId); if (!item) return; await item.context.dispose(); await item.model.dispose(); loaded.delete(modelId); }
-export function startStream(options: { modelId: string; systemPrompt: string; userMessage: string; context: string; phase: InferencePhase; maxTokens?: number; onToken: (text: string) => void; onEnd: (result: CompletionResult) => void; onError: (error: Error) => void }): StreamHandle {
+export function startStream(options: { modelId: string; systemPrompt: string; userMessage: string; context: string; phase: InferencePhase; structured?: boolean; maxTokens?: number; onToken: (text: string) => void; onEnd: (result: CompletionResult) => void; onError: (error: Error) => void }): StreamHandle {
   const streamId = `stream-${++sequence}`; const controller = new AbortController();
-  void (async () => { const started = Date.now(); try { await loadModel(options.modelId); const item = loaded.get(options.modelId); if (!item) throw new Error("Model context unavailable"); const seq = item.context.getSequence(); try { const session = new LlamaChatSession({ contextSequence: seq, systemPrompt: options.systemPrompt.replace("{{context}}", options.context) }); let text = ""; const response = await session.prompt(options.userMessage, { signal: controller.signal, maxTokens: options.maxTokens ?? 768, onTextChunk: (chunk: string) => { if (!controller.signal.aborted) { text += chunk; options.onToken(chunk); } } }); const meter = seq.tokenMeter.getState(); if (controller.signal.aborted) { options.onEnd({ text, tokensIn: meter.usedInputTokens ?? 0, tokensOut: meter.usedOutputTokens ?? 0, msPlanning: 0, msEditGen: 0 }); return; } options.onEnd({ text: text || response, tokensIn: meter.usedInputTokens ?? 0, tokensOut: meter.usedOutputTokens ?? 0, msPlanning: options.phase === "planning" ? Date.now() - started : 0, msEditGen: options.phase === "edit-gen" ? Date.now() - started : 0 }); } finally { await seq.dispose(); } } catch (error) { if (controller.signal.aborted) options.onEnd({ text: "", tokensIn: 0, tokensOut: 0, msPlanning: 0, msEditGen: 0 }); else options.onError(error instanceof Error ? error : new Error(String(error))); } })();
+  void (async () => { const started = Date.now(); try { await loadModel(options.modelId); const item = loaded.get(options.modelId); if (!item) throw new Error("Model context unavailable"); const seq = item.context.getSequence(); try { const runtime = await getRuntime(); const grammar = options.structured ? await runtime.createGrammarForJsonSchema(AGENT_RESPONSE_SCHEMA) : undefined; const session = new LlamaChatSession({ contextSequence: seq, systemPrompt: options.systemPrompt.replace("{{context}}", options.context) }); let text = ""; const response = await session.prompt(options.userMessage, { signal: controller.signal, maxTokens: options.maxTokens ?? 768, grammar, onTextChunk: (chunk: string) => { if (!controller.signal.aborted) { text += chunk; options.onToken(chunk); } } }); const meter = seq.tokenMeter.getState(); if (controller.signal.aborted) { options.onEnd({ text, tokensIn: meter.usedInputTokens ?? 0, tokensOut: meter.usedOutputTokens ?? 0, msPlanning: 0, msEditGen: 0 }); return; } options.onEnd({ text: text || response, tokensIn: meter.usedInputTokens ?? 0, tokensOut: meter.usedOutputTokens ?? 0, msPlanning: options.phase === "planning" ? Date.now() - started : 0, msEditGen: options.phase === "edit-gen" ? Date.now() - started : 0 }); } finally { await seq.dispose(); } } catch (error) { if (controller.signal.aborted) options.onEnd({ text: "", tokensIn: 0, tokensOut: 0, msPlanning: 0, msEditGen: 0 }); else options.onError(error instanceof Error ? error : new Error(String(error))); } })();
   return { streamId, abort: () => controller.abort() };
 }

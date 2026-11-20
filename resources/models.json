@@ -27,7 +27,7 @@
       "license": "Apache-2.0",
       "contextLength": 32768,
       "tier": 1,
-      "roles": ["router", "ask", "autocomplete"]
+      "roles": ["router", "ask", "agent", "autocomplete"]
     },
     {
       "id": "qwen2.5-coder-3b-q4",
