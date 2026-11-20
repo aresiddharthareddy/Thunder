@@ -20,6 +20,7 @@ export const CH = {
   CHAT_SESSION_GET: "chat:session:get",
   FILE_READ: "file:read",
   FILE_OPEN: "file:open",
+  FILE_OPEN_WORKSPACE: "file:openWorkspace",
   FILE_TREE: "file:tree",
   FILE_WRITE: "file:write",
   DIFF_STAGE: "diff:stage",
