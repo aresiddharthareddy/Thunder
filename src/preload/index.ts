@@ -8,6 +8,7 @@ import type { CompletionResult } from "../core/inference.js";
 import type { AgentPlanStep, AgentRunResult } from "../core/agent.js";
 import type { TerminalRequest, TerminalResult } from "../core/terminal.js";
 import type { Entitlement, ProFeatureKey } from "../shared/types.js";
+import type { WaitlistInterest } from "../core/waitlist.js";
 
 const api = {
   hardware: {
@@ -55,6 +56,9 @@ const api = {
     get: (): Promise<Entitlement> => ipcRenderer.invoke(CH.ENTITLEMENT_GET) as Promise<Entitlement>,
     activate: (licenseKey: string): Promise<Entitlement> => ipcRenderer.invoke(CH.ENTITLEMENT_ACTIVATE, licenseKey) as Promise<Entitlement>,
     featureEnabled: async (feature: ProFeatureKey): Promise<boolean> => (await ipcRenderer.invoke(CH.ENTITLEMENT_GET) as Entitlement).features[feature],
+  },
+  waitlist: {
+    submit: (request: { email: string; planInterest: WaitlistInterest }): Promise<{ submitted: boolean }> => ipcRenderer.invoke(CH.WAITLIST_SUBMIT, request) as Promise<{ submitted: boolean }>,
   },
   security: {
     classifyPath: (payload: { targetPath: string; intent: "read" | "write"; workspaceRoot: string }) => ipcRenderer.invoke(CH.SECURITY_CLASSIFY_PATH, payload),
