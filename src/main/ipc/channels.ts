@@ -15,6 +15,8 @@ export const CH = {
   AGENT_RUN: "agent:run",
   FILE_TREE: "file:tree",
   FILE_READ: "file:read",
+  FILE_OPEN: "file:open",
+  FILE_WRITE: "file:write",
   DIFF_STAGE: "diff:stage",
   DIFF_APPLY: "diff:apply",
   DIFF_REJECT: "diff:reject",

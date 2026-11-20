@@ -8,6 +8,7 @@ import { setZeroOutbound } from "../core/security.js";
 import { db } from "./db/index.js";
 import { registerInferenceIpc } from "./ipc/inference.ipc.js";
 import { registerSecurityIpc } from "./ipc/security.ipc.js";
+import { registerFilesIpc } from "./ipc/files.ipc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +39,7 @@ app.whenReady().then(() => {
   registerCatalogIpc();
   registerInferenceIpc();
   registerSecurityIpc();
+  registerFilesIpc();
   const row = db.prepare("SELECT value FROM kv WHERE key = ?").get("zero_outbound") as { value: string } | undefined;
   setZeroOutbound(row?.value === "true");
   createWindow();

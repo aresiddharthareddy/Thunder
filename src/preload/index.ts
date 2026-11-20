@@ -51,6 +51,11 @@ const api = {
     redactSecrets: (text: string) => ipcRenderer.invoke(CH.SECURITY_REDACT, text),
     rulesetHash: (): Promise<string> => ipcRenderer.invoke(CH.SECURITY_HASH) as Promise<string>,
   },
+  files: {
+    open: (): Promise<{ filePath: string; workspaceRoot: string; content: string } | null> => ipcRenderer.invoke(CH.FILE_OPEN) as Promise<{ filePath: string; workspaceRoot: string; content: string } | null>,
+    read: (payload: { filePath: string; workspaceRoot: string }): Promise<string> => ipcRenderer.invoke(CH.FILE_READ, payload) as Promise<string>,
+    write: (payload: { filePath: string; workspaceRoot: string; content: string }): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.FILE_WRITE, payload) as Promise<{ ok: boolean }>,
+  },
 };
 
 contextBridge.exposeInMainWorld("thunder", api);
