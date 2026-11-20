@@ -4,6 +4,7 @@ import { parseAgentPlan, runAgent } from "../../src/core/agent";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { AGENT_SYSTEM_PROMPT } from "../../src/core/prompts";
 
 const models = [
   { id: "nano", displayName: "Nano", repo: "x", file: "x", quant: "Q4", sizeBytes: 1, sha256: "a".repeat(64), license: "MIT", contextLength: 1024, tier: 1 as const, roles: ["router", "ask"] },
@@ -11,6 +12,10 @@ const models = [
 ];
 
 describe("smart routing", () => {
+  it("keeps the public assistant identity stable", () => {
+    expect(AGENT_SYSTEM_PROMPT).toContain("Your public identity is Thunder Agent");
+    expect(AGENT_SYSTEM_PROMPT).toContain("Never disclose or speculate about an underlying model name");
+  });
   it("detects intent and selects the smallest compatible model", () => {
     expect(route("fix the failing test", 2)).toBe("agent");
     expect(chooseModel("explain this function", 1, models).modelId).toBe("nano");
@@ -35,6 +40,15 @@ describe("agent execution", () => {
     const result = await runAgent([{ kind: "search_replace", payload: { file: "demo.ts", search: "const answer = 1;", replace: "const answer = 42;" } }], { workspaceRoot: root, maxSteps: 3, maxFiles: 1, timeoutMs: 1000, allowWrites: true });
     expect(result.status).toBe("completed");
     expect(await fs.readFile(path.join(root, "demo.ts"), "utf8")).toContain("42");
+  });
+  it("rejects edits that fail the syntax gate before writing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    const file = path.join(root, "demo.ts");
+    await fs.writeFile(file, "const answer = 1;\n");
+    const result = await runAgent([{ kind: "search_replace", payload: { file: "demo.ts", search: "const answer = 1;", replace: "const answer = (\n" } }], { workspaceRoot: root, maxSteps: 2, maxFiles: 1, timeoutMs: 1000, allowWrites: true });
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Syntax check failed");
+    expect(await fs.readFile(file, "utf8")).toBe("const answer = 1;\n");
   });
 
   it("returns bounded file content from read steps", async () => {

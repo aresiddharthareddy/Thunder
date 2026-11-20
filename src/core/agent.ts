@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
+import ts from "typescript";
 import type { AgentStep, AgentStepKind, AgentStepStatus, SearchReplaceBlock } from "../shared/types.js";
 
 export interface AgentPolicy {
@@ -51,6 +52,17 @@ function applyBlock(content: string, block: SearchReplaceBlock): string {
   return content.replace(block.search, block.replace);
 }
 
+function validateSyntax(file: string, content: string): void {
+  if (/\.json$/i.test(file)) {
+    JSON.parse(content);
+    return;
+  }
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return;
+  const result = ts.transpileModule(content, { fileName: file, reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022 } });
+  const diagnostic = result.diagnostics?.[0];
+  if (diagnostic) throw new Error(`Syntax check failed for ${file}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\\n")}`);
+}
+
 export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signal?: AbortSignal, onStep?: (step: AgentStep) => void): Promise<AgentRunResult> {
   const taskId = crypto.randomUUID();
   const started = Date.now();
@@ -80,7 +92,9 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
         if (changed.size >= policy.maxFiles && !changed.has(block.file)) throw new Error(`Agent file budget exceeded: ${policy.maxFiles}`);
         const file = await safeExistingPath(policy.workspaceRoot, block.file); const content = await fs.readFile(file, "utf8");
         if (!originals.has(file)) originals.set(file, content);
-        await fs.writeFile(file, applyBlock(content, block)); changed.add(block.file); finish(index, item.kind, block, "ok", stepStarted); continue;
+        const next = applyBlock(content, block);
+        validateSyntax(block.file, next);
+        await fs.writeFile(file, next); changed.add(block.file); finish(index, item.kind, block, "ok", stepStarted); continue;
       }
       if (item.kind === "plan" || item.kind === "finish") { finish(index, item.kind, item.payload, "ok", stepStarted); continue; }
       throw new Error(`Unsupported agent step: ${item.kind}`);
