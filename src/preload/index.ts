@@ -36,7 +36,7 @@ const api = {
   },
   inference: {
     load: (modelId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.INFER_LOAD, modelId) as Promise<{ ok: boolean }>,
-    streamStart: (payload: { input: string; modelId: string; mode?: Mode }): Promise<{ streamKey: string }> => ipcRenderer.invoke(CH.INFER_STREAM_START, payload) as Promise<{ streamKey: string }>,
+    streamStart: (payload: { input: string; modelId: string; mode?: Mode; context?: string }): Promise<{ streamKey: string }> => ipcRenderer.invoke(CH.INFER_STREAM_START, payload) as Promise<{ streamKey: string }>,
     streamCancel: (streamKey: string): Promise<{ aborted: boolean }> => ipcRenderer.invoke(CH.INFER_STREAM_CANCEL, streamKey) as Promise<{ aborted: boolean }>,
     onToken: (callback: (payload: { streamKey: string; text: string }) => void): (() => void) => { const handler = (_event: Electron.IpcRendererEvent, payload: { streamKey: string; text: string }) => callback(payload); ipcRenderer.on(CH.INFER_STREAM_TOKEN, handler); return () => ipcRenderer.removeListener(CH.INFER_STREAM_TOKEN, handler); },
     onEnd: (callback: (payload: { streamKey: string; result: CompletionResult; error?: string }) => void): (() => void) => { const handler = (_event: Electron.IpcRendererEvent, payload: { streamKey: string; result: CompletionResult; error?: string }) => callback(payload); ipcRenderer.on(CH.INFER_STREAM_END, handler); return () => ipcRenderer.removeListener(CH.INFER_STREAM_END, handler); },

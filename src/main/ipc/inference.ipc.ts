@@ -2,17 +2,18 @@ import { ipcMain } from "electron";
 import crypto from "node:crypto";
 import { CH } from "./channels.js";
 import { startStream, loadModel, type StreamHandle } from "../../core/inference.js";
-import { ASK_SYSTEM_PROMPT } from "../../core/prompts.js";
+import { AGENT_SYSTEM_PROMPT, ASK_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT } from "../../core/prompts.js";
 import { route } from "../../core/router.js";
 import type { CompletionResult } from "../../core/inference.js";
 const active = new Map<string, StreamHandle>();
 export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
-  ipcMain.handle(CH.INFER_STREAM_START, (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent" }) => {
-    if (route(payload.input, 2, payload.mode) !== "ask") throw new Error("Only Ask mode is available in M3");
+  ipcMain.handle(CH.INFER_STREAM_START, (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
+    const mode = route(payload.input, 2, payload.mode);
+    const systemPrompt = mode === "agent" ? AGENT_SYSTEM_PROMPT : mode === "plan" ? PLAN_SYSTEM_PROMPT : ASK_SYSTEM_PROMPT;
     const streamKey = crypto.randomUUID(); const sender = event.sender;
     const emitEnd = (result: CompletionResult, error?: string) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_END, { streamKey, result, error }); active.delete(streamKey); };
-    const handle = startStream({ modelId: payload.modelId, systemPrompt: ASK_SYSTEM_PROMPT, userMessage: payload.input, context: "", phase: "planning", onToken: (text) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_TOKEN, { streamKey, text }); }, onEnd: (result) => emitEnd(result), onError: (error) => emitEnd({ text: "", tokensIn: 0, tokensOut: 0, msPlanning: 0, msEditGen: 0 }, error.message) }); active.set(streamKey, handle); return { streamKey };
+    const handle = startStream({ modelId: payload.modelId, systemPrompt, userMessage: payload.input, context: payload.context ?? "", phase: mode === "ask" ? "planning" : "edit-gen", onToken: (text) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_TOKEN, { streamKey, text }); }, onEnd: (result) => emitEnd(result), onError: (error) => emitEnd({ text: "", tokensIn: 0, tokensOut: 0, msPlanning: 0, msEditGen: 0 }, error.message) }); active.set(streamKey, handle); return { streamKey };
   });
   ipcMain.handle(CH.INFER_STREAM_CANCEL, (_event, streamKey: string) => { const handle = active.get(streamKey); if (!handle) return { aborted: false }; handle.abort(); return { aborted: true }; });
 }
