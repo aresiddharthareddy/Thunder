@@ -18,19 +18,58 @@ export class LocalEngine {
     let ctx;
     let session;
     try {
-      if (file !== this.file || this.layers !== tuning.gpuLayers) {
+      const autoTuning = tuning.gpuLayers === undefined || tuning.gpuLayers === 'auto';
+      const requestedLayers = autoTuning && this.autoCpu ? 0 : (tuning.gpuLayers ?? 'auto');
+      const load = async gpuLayers => {
+        await verifyFile(file, model, signal);
+        const runtimeKey = gpuLayers === 0 ? 'cpu' : 'gpu';
+        this.runtimes ??= new Map();
+        let runtime = this.runtimes.get(runtimeKey);
+        if (!runtime) {
+          runtime = await getLlama({ gpu: runtimeKey === 'cpu' ? false : "auto", build: "never", skipDownload: true, progressLogs: false });
+          this.runtimes.set(runtimeKey, runtime);
+        }
+        this.runtime = runtime;
+        this.loaded = await runtime.loadModel({ modelPath: file, loadSignal: signal, gpuLayers });
+        this.layers = gpuLayers;
+        this.file = file;
+        if (gpuLayers !== 0) this.autoCpu = false;
+      };
+      if (file !== this.file || this.layers !== requestedLayers) {
         await this.loaded?.dispose();
         this.file = undefined;
         this.loaded = undefined;
-        await verifyFile(file, model, signal);
-        this.runtime ??= await getLlama({ gpu: "auto", build: "never", skipDownload: true, progressLogs: false });
-        this.loaded = await this.runtime.loadModel({ modelPath: file, loadSignal: signal, gpuLayers: tuning.gpuLayers ?? 'auto' });
-        this.layers = tuning.gpuLayers;
-        this.file = file;
+        try { await load(requestedLayers); }
+        catch (error) {
+          if (requestedLayers === 0 || signal.aborted) throw error;
+          await this.loaded?.dispose();
+          this.loaded = undefined;
+          if (autoTuning) this.autoCpu = true;
+          try { await load(0); }
+          catch (fallbackError) {
+            throw new Error(`Thunder could not initialize local inference. GPU backend: ${error.message}. CPU fallback: ${fallbackError.message}`);
+          }
+        }
       }
       signal.throwIfAborted();
-      ctx = await this.loaded.createContext({ contextSize: tuning.contextSize || 4096, sequences: 1,
+      const createContext = () => this.loaded.createContext({ contextSize: tuning.contextSize || 4096, sequences: 1,
         ...(tuning.compactKV ? { flashAttention: true, kvCacheKeyType: 'q8_0', kvCacheValueType: 'q8_0' } : {}) });
+      try {
+        ctx = await createContext();
+      } catch (error) {
+        if (requestedLayers === 0 || this.layers === 0 || signal.aborted) throw error;
+        // Some machines expose Metal but cannot create a command queue under memory pressure.
+        // A single bounded CPU retry keeps Auto mode usable without changing the user's tuning.
+        await this.loaded?.dispose();
+        this.loaded = undefined;
+        this.file = undefined;
+        if (autoTuning) this.autoCpu = true;
+        try { await load(0); }
+        catch (fallbackError) {
+          throw new Error(`Thunder could not initialize local inference. GPU backend: ${error.message}. CPU fallback: ${fallbackError.message}`);
+        }
+        ctx = await createContext();
+      }
       const sequence = ctx.getSequence(tuning.lookup ? { tokenPredictor: new InputLookupTokenPredictor() } : {});
       const system = ({
         ask: "You are Thunder, a local coding assistant. Answer the question directly. Cite the file and line for claims about the supplied project. Say when information is missing.",
@@ -56,5 +95,10 @@ export class LocalEngine {
       finally { this.busy = false; }
     }
   }
-  async dispose() { await this.loaded?.dispose(); await this.runtime?.dispose(); }
+  async dispose() {
+    await this.loaded?.dispose();
+    for (const runtime of this.runtimes?.values() || []) await runtime.dispose();
+    this.loaded = undefined;
+    this.runtimes?.clear();
+  }
 }

@@ -3,11 +3,18 @@ import { createReadStream } from "node:fs";
 import { mkdir, open, rename, rm, stat, statfs } from "node:fs/promises";
 import path from "node:path";
 
+const verified = new Map();
+
 export async function verifyFile(file, model, signal) {
-  if ((await stat(file)).size !== model.sizeBytes) throw new Error("The model size differs from the catalog.");
+  const info = await stat(file);
+  if (info.size !== model.sizeBytes) throw new Error("The model size differs from the catalog.");
+  const key = `${file}:${info.size}:${info.mtimeMs}`;
+  if (verified.get(key) === model.sha256) return;
   const hash = createHash("sha256");
   for await (const bytes of createReadStream(file, { signal })) hash.update(bytes);
   if (hash.digest("hex") !== model.sha256) throw new Error("Model checksum verification failed.");
+  for (const cached of verified.keys()) if (cached.startsWith(`${file}:`)) verified.delete(cached);
+  verified.set(key, model.sha256);
 }
 
 export async function installModel(model, directory, { signal, progress, offline, request = fetch }) {
