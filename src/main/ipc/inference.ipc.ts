@@ -14,6 +14,12 @@ import { runAgent } from "../../core/agent.js";
 import { classifyPath, redactSecrets } from "../../core/security.js";
 import { db } from "../db/index.js";
 const active = new Map<string, StreamHandle>();
+const modes = new Set(["ask", "plan", "agent"]);
+function requireMode(mode: unknown): "ask" | "plan" | "agent" | undefined {
+  if (mode === undefined) return undefined;
+  if (typeof mode !== "string" || !modes.has(mode)) throw new Error("Invalid inference mode");
+  return mode as "ask" | "plan" | "agent";
+}
 async function installedModels(): Promise<ReturnType<typeof readBundledCatalog>["models"]> {
   const catalog = readBundledCatalog();
   return (await Promise.all(catalog.models.map(async (model) => {
@@ -22,15 +28,19 @@ async function installedModels(): Promise<ReturnType<typeof readBundledCatalog>[
 }
 export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_ROUTE, async (_event, payload: { input: string; mode?: "ask" | "plan" | "agent" }) => {
+    if (!payload || typeof payload.input !== "string") throw new Error("Inference input must be text");
+    const mode = requireMode(payload.mode);
     const hardware = await detectHardware();
     const available = await installedModels();
-    return chooseModel(payload.input, hardware.tier, available, payload.mode);
+    return chooseModel(payload.input, hardware.tier, available, mode);
   });
-  ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
+  ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { if (typeof modelId !== "string") throw new Error("Model id must be text"); await loadModel(modelId); return { ok: true }; });
   ipcMain.handle(CH.INFER_STREAM_START, async (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
+    if (!payload || typeof payload.input !== "string" || typeof payload.modelId !== "string" || (payload.context !== undefined && typeof payload.context !== "string")) throw new Error("Invalid inference request");
+    const explicitMode = requireMode(payload.mode);
     if (payload.input.length > 64_000 || (payload.context?.length ?? 0) > 32_000) throw new Error("Inference input is too large");
     const hardware = await detectHardware();
-    const requestedMode = route(payload.input, hardware.tier, payload.mode);
+    const requestedMode = route(payload.input, hardware.tier, explicitMode);
     const mode = capabilitiesFor(hardware.tier).modes.includes(requestedMode) ? requestedMode : "ask";
     const available = await installedModels();
     const selected = available.find((model) => model.id === payload.modelId);
@@ -46,7 +56,7 @@ export function registerInferenceIpc(): void {
   });
   ipcMain.handle(CH.INFER_STREAM_CANCEL, (_event, streamKey: string) => { const handle = active.get(streamKey); if (!handle) return { aborted: false }; handle.abort(); return { aborted: true }; });
   ipcMain.handle(CH.AGENT_RUN, async (_event, payload: { plan: import("../../core/agent.js").AgentPlanStep[]; workspaceRoot: string; allowWrites: boolean }) => {
-    if (!payload.workspaceRoot || !Array.isArray(payload.plan)) throw new Error("Invalid agent request");
+    if (!payload || typeof payload.workspaceRoot !== "string" || !payload.workspaceRoot || !Array.isArray(payload.plan) || typeof payload.allowWrites !== "boolean") throw new Error("Invalid agent request");
     const hardware = await detectHardware(); const capabilities = capabilitiesFor(hardware.tier);
     if (!capabilities.modes.includes("agent")) throw new Error(`Agent mode is unavailable on hardware tier ${hardware.tier}`);
     for (const item of payload.plan) {
