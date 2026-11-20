@@ -16,14 +16,14 @@
       { "command": "thunder.open", "title": "Thunder: Open Assistant" },
       { "command": "thunder.models", "title": "Thunder: Manage Local Models" },
       { "command": "thunder.doctor", "title": "Thunder: Export Diagnostics" },
-      { "command": "thunder.activateLicense", "title": "Thunder: Activate Offline License" },
-      { "command": "thunder.waitlist", "title": "Thunder: Record Pro Interest Locally" }
+      { "command": "thunder.account", "title": "Thunder: Switch Account" }
     ],
     "configurationDefaults": {
       "telemetry.telemetryLevel": "off",
       "extensions.autoCheckUpdates": false,
       "extensions.autoUpdate": false,
       "update.mode": "none",
+      "workbench.secondarySideBar.defaultVisibility": "visible",
       "workbench.startupEditor": "none"
     },
     "configuration": { "title": "Thunder", "properties": {

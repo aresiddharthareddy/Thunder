@@ -1,49 +1,169 @@
 const vscode = require('vscode');
-const path = require('node:path');
 const fs = require('node:fs/promises');
+const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { Services } = require('./services.cjs');
+const { collect, redact } = require('./context.cjs');
+const { routes } = require('./auto.cjs');
+const { stage } = require('./changes.cjs');
+const { panel } = require('./panel.cjs');
 
-function activate(context) {
-  const provider = new AssistantViewProvider(context.extensionUri, context);
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider('thunder.assistant', provider, { webviewOptions: { retainContextWhenHidden: true } }));
-  context.subscriptions.push(vscode.commands.registerCommand('thunder.open', () => provider.reveal()));
-  context.subscriptions.push(vscode.commands.registerCommand('thunder.models', () => vscode.window.showInformationMessage('Thunder models are managed from the Assistant panel.')));
-  context.subscriptions.push(vscode.commands.registerCommand('thunder.doctor', async () => {
-    const report = { generatedAt: Date.now(), version: '0.2.0', engine: 'node-llama-cpp 3.22.3', workspace: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null };
-    const uri = await vscode.window.showSaveDialog({ saveLabel: 'Export Thunder diagnostics', filters: { JSON: ['json'] }, defaultUri: vscode.Uri.file(path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd(), 'thunder-diagnostic.json')) });
-    if (uri) await fs.writeFile(uri.fsPath, JSON.stringify(report, null, 2));
-  }));
-}
-
-class AssistantViewProvider {
-  constructor(extensionUri, context) { this.extensionUri = extensionUri; this.context = context; this.view = null; this.engine = null; this.abort = null; }
-  resolveWebviewView(view) { this.view = view; view.webview.options = { enableScripts: true, localResourceRoots: [this.extensionUri] }; view.webview.html = html(); view.webview.onDidReceiveMessage((message) => this.handle(message)); }
-  reveal() { this.view?.show?.(true); }
-  async handle(message) {
-    if (message.type === 'send') await this.send(message.text, message.mode);
-    if (message.type === 'cancel') this.abort?.abort();
+class Assistant {
+  constructor(ctx) {
+    this.ctx=ctx;
+    this.services=new Services(ctx);
+    this.previews=new Map();
+    this.history=[];
   }
-  async send(text, mode) {
-    if (!text?.trim()) return;
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!root) return this.post({ type: 'error', text: 'Open a workspace folder to use Thunder.' });
-    const file = vscode.window.activeTextEditor?.document;
-    let context = '';
-    if (file) context = `<file path="${vscode.workspace.asRelativePath(file.uri)}">\n${file.getText().slice(0, 12000)}\n</file>`;
-    const model = { id: 'qwen2.5-coder-1.5b-q4', repo: 'Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF', file: 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf', revision: 'f86cb2c1fa58255f8052cc32aeede1b7482d4361', sizeBytes: 1117320768, sha256: 'cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046' };
-    const modelFile = path.join(this.context.extensionPath, 'models', model.file);
-    this.abort = new AbortController();
+  post(message) { return this.view?.webview.postMessage(message); }
+  status() {
+    const s=this.services;
+    this.post({type:'state',user:s.user,pro:s.pro,tier:s.hw.tier,offline:s.offline,busy:!!this.run,
+      review:this.pending?.batches[0]?.map(c=>c.file)||[],more:(this.pending?.batches.length||1)-1});
+  }
+  resolveWebviewView(view) {
+    this.view=view;
+    view.webview.options={enableScripts:true,localResourceRoots:[]};
+    view.webview.onDidReceiveMessage(m=>this.dispatch(m));
+    view.onDidDispose(()=>{this.run?.abort();this.clearReview();this.view=null;});
+    view.webview.html=panel();
+  }
+  clearReview() { this.pending=null; this.previews.clear(); }
+  async dispatch(m) {
     try {
-      if (!this.engine) { const { LocalEngine } = await import('./engine.mjs'); this.engine = new LocalEngine(); }
-      this.post({ type: 'started' });
-      const result = await this.engine.run({ mode: mode || 'ask', input: text, context, file: modelFile, model, signal: this.abort.signal, onText: (chunk) => this.post({ type: 'token', text: chunk }) });
-      this.post({ type: 'done', text: result.text });
-    } catch (error) { this.post({ type: 'error', text: error.name === 'AbortError' ? 'Cancelled.' : error.message }); }
-    finally { this.abort = null; }
+      if (m.type==='cancel') return this.run?.abort();
+      if (m.type==='ready') return this.status();
+      if (m.type==='send') return await this.send(m);
+      if (this.run || this.action) return;
+      this.action=true;
+      try {
+        switch (m.type) {
+          case 'review': await this.preview(m.file); break;
+          case 'apply': await this.apply(); break;
+          case 'reject': this.clearReview(); break;
+          case 'account': await this.services.account(); this.history=[]; this.clearReview(); this.post({type:'clear'}); break;
+          case 'lab': await this.services.lab(); break;
+          case 'folder': await this.services.folder(); break;
+          case 'tuning': await this.services.tune(); break;
+          case 'team': await this.services.team(); break;
+          case 'doctor': await this.services.doctor(); break;
+          case 'network': await vscode.workspace.getConfiguration('thunder').update('zeroOutbound',!this.services.offline,vscode.ConfigurationTarget.Global); break;
+          case 'terminal': await this.terminal(); break;
+          case 'open': await vscode.commands.executeCommand('vscode.openFolder'); break;
+          case 'pack': void this.services.hydrate().catch(e=>this.notice(e.name==='AbortError'?'Download paused.':e.message)); break;
+        }
+      } finally { this.action=false; }
+    } catch(e) { this.notice(e.message); }
+    finally { this.status(); }
   }
-  post(message) { this.view?.webview.postMessage(message); }
+  notice(text) { this.post({type:'notice',text}); }
+  async terminal() {
+    if(!vscode.workspace.isTrusted) throw new Error('Trust the workspace before running a terminal command.');
+    const folder=vscode.workspace.workspaceFolders?.[0];
+    if(!folder) throw new Error('Open a folder first.');
+    const cmd=await vscode.window.showInputBox({title:'Run a workspace command'});
+    if(!cmd?.trim()) return;
+    if(await vscode.window.showWarningMessage('Run this command once?',{modal:true,detail:folder.uri.fsPath+'\n'+cmd},'Run once')!=='Run once') return;
+    const terminal=vscode.window.createTerminal({name:'Thunder',cwd:folder.uri});
+    terminal.show(); terminal.sendText(cmd);
+    await this.services.audit('terminal.approved',{});
+  }
+  async send({text,mode}) {
+    if(this.run || this.action || typeof text!=='string' || !text.trim()) return;
+    if(text.length>8000) throw new Error('Shorten the request to 8,000 characters.');
+    if(!['ask','plan','agent','cloud'].includes(mode)) throw new Error('Choose a supported mode.');
+    if(this.pending) throw new Error('Apply or discard the staged edits first.');
+    const controller=this.run=new AbortController();
+    const signal=controller.signal;
+    const s=this.services;
+    this.post({type:'start',text}); this.status();
+    let answer='';
+    try {
+      if (mode==='cloud') {
+        answer=await s.cloud(redact(text),signal)||'Cloud request cancelled.';
+      } else if (/\b(who are you|what (?:ai |language )?model (?:are you|is this)|(?:your|underlying|actual|real) (?:model|identity)|what are you powered by)\b/i.test(text)) {
+        answer='I’m Thunder Agent, your local coding assistant.';
+      } else {
+        const sources=await collect(text);
+        if(mode==='agent' && !sources.size) throw new Error('Open a trusted workspace folder and a source file to propose an edit.');
+        const files=[...sources].map(([file,src])=>'File: '+file+'\n'+src.before.slice(0,7500)).join('\n\n');
+        const route=routes(await s.models(),s.hw,mode,text,s.pro && s.state.get('pins',{})[mode]);
+        this.engine ??= new (await import('./engine.mjs')).LocalEngine();
+        let notes=this.history.slice(-4).join('\n').slice(-1100);
+        const infer=async (model,phase,input,maxTokens,onText)=>{
+          signal.throwIfAborted();
+          const result=await this.engine.run({mode:phase,input,context:files,history:notes,model,file:model.location,signal,maxTokens,tuning:s.tuning,onText});
+          if(result.elapsedMs>0) await s.state.update('rate:'+model.id,Math.round(result.usedOutputTokens*1000/result.elapsedMs)+' tokens/s last run');
+          return result.text;
+        };
+        if(route.length>1) {
+          this.post({type:'phase',text:'Reading workspace context…'});
+          notes=(await infer(route[0],'triage',text,72)).slice(0,450);
+        }
+        const selected=route.at(-1);
+        this.post({type:'phase',text:mode==='agent'?'Preparing a diff…':'Composing…'});
+        if(mode==='agent') {
+          let request=text;
+          for(let i=0;i<2;i++) {
+            const proposal=await infer(selected,mode,request,900);
+            try { this.pending=stage(proposal,sources,s.hw.files); break; }
+            catch(e) {
+              if(i===1) throw new Error('Could not stage a valid edit. '+e.message);
+              this.post({type:'phase',text:'Checking the edit again…'});
+              request=text+'\nCorrect the previous proposal: '+e.message;
+            }
+          }
+          answer=this.pending.summary;
+          await this.preview(this.pending.batches[0][0].file);
+        } else answer=await infer(selected,mode,text,mode==='plan'?640:384,chunk=>this.post({type:'token',text:chunk}));
+        await s.audit('inference',{mode,phases:route.length,files:sources.size});
+      }
+      this.history.push(redact(text),redact(answer)); this.history=this.history.slice(-4);
+      this.post({type:'end',text:answer});
+    } catch(e) { this.post({type:'end',text:signal.aborted?'Cancelled.':e.message}); }
+    finally { this.run=null; this.status(); }
+  }
+  async preview(file) {
+    const c=this.pending?.batches[0].find(item=>item.file===file);
+    if(!c) return;
+    const uri=vscode.Uri.from({scheme:'thunder-preview',path:'/'+c.file,query:randomUUID()});
+    this.previews.set(uri.toString(),c.after);
+    await vscode.commands.executeCommand('vscode.diff',c.uri,uri,'Thunder · '+c.file,{preview:true,preserveFocus:true});
+  }
+  async apply() {
+    const batch=this.pending?.batches[0];
+    if(!batch || !vscode.workspace.isTrusted) throw new Error('A reviewed edit in a trusted workspace is required.');
+    const edit=new vscode.WorkspaceEdit();
+    for(const c of batch) {
+      const folder=vscode.workspace.getWorkspaceFolder(c.uri);
+      if(!folder || await fs.realpath(c.uri.fsPath)!==path.join(await fs.realpath(folder.uri.fsPath),c.file)) throw new Error('The workspace path changed. Discard and regenerate the edit.');
+      const doc=await vscode.workspace.openTextDocument(c.uri);
+      if(doc.version!==c.version || doc.getText()!==c.before) throw new Error('File changed after review. Discard and regenerate the edit.');
+      edit.replace(c.uri,new vscode.Range(doc.positionAt(0),doc.positionAt(c.before.length)),c.after);
+    }
+    if(!await vscode.workspace.applyEdit(edit)) throw new Error('The workbench declined the edit.');
+    this.pending.batches.shift();
+    if(this.pending.batches.length) await this.preview(this.pending.batches[0][0].file);
+    else this.clearReview();
+    this.notice('Applied to '+batch.map(c=>c.file).join(', ')+'. Save or undo in the editor.');
+    await this.services.audit('agent.apply',{count:batch.length});
+  }
 }
-
-function html() { return `<!doctype html><html><head><meta charset="UTF-8"><style>
-body{font:13px var(--vscode-font-family);color:var(--vscode-foreground);padding:12px}h1{font-size:18px;margin:0 0 5px}.sub{opacity:.7;margin-bottom:16px}.messages{min-height:180px;max-height:calc(100vh - 170px);overflow:auto}.msg{padding:9px;border-radius:6px;margin:8px 0;white-space:pre-wrap}.user{background:var(--vscode-textBlockQuote-background)}.assistant{background:var(--vscode-editor-inactiveSelectionBackground)}textarea{width:100%;box-sizing:border-box;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);padding:8px;resize:vertical}button,select{margin-top:8px;padding:5px 9px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0}button+button{margin-left:6px}</style></head><body><h1>Thunder</h1><div class="sub">Private local coding assistant</div><div id="messages" class="messages"></div><textarea id="input" rows="4" placeholder="Ask about the open file..."></textarea><select id="mode"><option value="ask">Ask</option><option value="plan">Plan</option><option value="agent">Agent</option></select> <button id="send">Send</button><button id="cancel">Cancel</button><script>const api=acquireVsCodeApi(),root=document.getElementById('messages'),input=document.getElementById('input'),mode=document.getElementById('mode');let current=null;function add(text,cl){const el=document.createElement('div');el.className='msg '+cl;el.textContent=text;root.appendChild(el);root.scrollTop=root.scrollHeight;return el}document.getElementById('send').onclick=()=>{if(!input.value.trim())return;add(input.value,'user');current=add('','assistant');api.postMessage({type:'send',text:input.value,mode:mode.value});input.value=''};document.getElementById('cancel').onclick=()=>api.postMessage({type:'cancel'});window.addEventListener('message',e=>{const m=e.data;if(m.type==='token'&&current)current.textContent+=m.text;if(m.type==='done'&&current)current.dataset.done='true';if(m.type==='error')add(m.text,'assistant')});</script></body></html>`; }
-module.exports = { activate, deactivate() {} };
+let assistant;
+async function activate(ctx) {
+  assistant=new Assistant(ctx);
+  await assistant.services.init();
+  ctx.subscriptions.push(vscode.window.registerWebviewViewProvider('thunder.assistant',assistant,{webviewOptions:{retainContextWhenHidden:true}}),
+    vscode.workspace.registerTextDocumentContentProvider('thunder-preview',{provideTextDocumentContent:uri=>assistant.previews.get(uri.toString())??''}),
+    vscode.workspace.onDidChangeConfiguration(e=>{if(e.affectsConfiguration('thunder.zeroOutbound') && assistant.services.offline){assistant.services.download?.abort();assistant.run?.abort();}assistant.status();}));
+  const commands={open:()=>vscode.commands.executeCommand('thunder.assistant.focus'),models:()=>assistant.dispatch({type:'lab'}),doctor:()=>assistant.dispatch({type:'doctor'}),account:()=>assistant.dispatch({type:'account'})};
+  for(const [name,handler] of Object.entries(commands)) ctx.subscriptions.push(vscode.commands.registerCommand('thunder.'+name,handler));
+  if (!ctx.globalState.get('welcomed') && ctx.extensionMode!==vscode.ExtensionMode.Test) {
+    await ctx.globalState.update('welcomed',true);
+    void vscode.commands.executeCommand('thunder.assistant.focus');
+    const pack=(await assistant.services.models()).filter(m=>m.tier<=assistant.services.hw.tier && (m.sizeBytes<2e9 || m.id.includes('7b') && assistant.services.hw.gb>=16));
+    if(pack.some(m=>!m.location)) void assistant.services.hydrate().catch(e=>assistant.notice(e.message));
+  }
+}
+async function deactivate(){ assistant?.run?.abort(); assistant?.services.download?.abort(); await assistant?.engine?.dispose(); }
+module.exports={activate,deactivate,Assistant};
