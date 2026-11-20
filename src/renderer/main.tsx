@@ -92,7 +92,7 @@ function App(): JSX.Element {
       <header className="topbar">
         <div className="brand-mark">T</div>
         <div><div className="brand">THUNDER</div><div className="subtitle">Local-first coding intelligence</div></div>
-        <div className="status"><span className="status-dot" /> M1 prototype</div>
+        <div className="status"><span className="status-dot" /> Local beta</div>
       </header>
       <div className="content">
         <div className="intro">

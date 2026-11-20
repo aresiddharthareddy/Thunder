@@ -55,7 +55,7 @@ const api = {
   entitlement: {
     get: (): Promise<Entitlement> => ipcRenderer.invoke(CH.ENTITLEMENT_GET) as Promise<Entitlement>,
     activate: (licenseKey: string): Promise<Entitlement> => ipcRenderer.invoke(CH.ENTITLEMENT_ACTIVATE, licenseKey) as Promise<Entitlement>,
-    featureEnabled: async (feature: ProFeatureKey): Promise<boolean> => (await ipcRenderer.invoke(CH.ENTITLEMENT_GET) as Entitlement).features[feature],
+    featureEnabled: async (feature: ProFeatureKey): Promise<boolean> => { const entitlement = await ipcRenderer.invoke(CH.ENTITLEMENT_GET) as Entitlement; return entitlement.features[feature] && (entitlement.expiresAt === null || entitlement.expiresAt > Date.now()); },
   },
   waitlist: {
     submit: (request: { email: string; planInterest: WaitlistInterest }): Promise<{ submitted: boolean }> => ipcRenderer.invoke(CH.WAITLIST_SUBMIT, request) as Promise<{ submitted: boolean }>,
