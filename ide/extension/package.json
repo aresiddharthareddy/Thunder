@@ -1,0 +1,40 @@
+{
+  "name": "thunder-local",
+  "displayName": "Thunder",
+  "description": "Ask about a project, plan changes and review local AI edits.",
+  "publisher": "thunder",
+  "version": "0.2.0",
+  "engines": { "vscode": "^1.100.0" },
+  "main": "./extension.cjs",
+  "activationEvents": ["onStartupFinished"],
+  "extensionKind": ["ui"],
+  "capabilities": { "untrustedWorkspaces": { "supported": "limited", "description": "Project context and edits require workspace trust." }, "virtualWorkspaces": false },
+  "contributes": {
+    "viewsContainers": { "activitybar": [{ "id": "thunder", "title": "Thunder", "icon": "bolt.svg" }] },
+    "views": { "thunder": [{ "id": "thunder.assistant", "name": "Local assistant", "type": "webview" }] },
+    "commands": [
+      { "command": "thunder.open", "title": "Thunder: Open Assistant" },
+      { "command": "thunder.models", "title": "Thunder: Manage Local Models" },
+      { "command": "thunder.doctor", "title": "Thunder: Export Diagnostics" },
+      { "command": "thunder.activateLicense", "title": "Thunder: Activate Offline License" },
+      { "command": "thunder.waitlist", "title": "Thunder: Record Pro Interest Locally" }
+    ],
+    "configurationDefaults": {
+      "telemetry.telemetryLevel": "off",
+      "extensions.autoCheckUpdates": false,
+      "extensions.autoUpdate": false,
+      "update.mode": "none",
+      "workbench.startupEditor": "none"
+    },
+    "configuration": { "title": "Thunder", "properties": {
+      "thunder.zeroOutbound": { "type": "boolean", "default": true, "scope": "application", "description": "Block Thunder model downloads. The bundled model runs offline." }
+    }}
+  },
+  "dependencies": {
+    "node-llama-cpp": "3.22.3",
+    "systeminformation": "5.27.11",
+    "check-disk-space": "3.4.0",
+    "micromatch": "4.0.8",
+    "typescript": "5.7.2"
+  }
+}

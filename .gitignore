@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+dist
+release
+.DS_Store
+.thunder-build
+ide/extension/generated
+ide/extension/models
+*.log
+dev-keys
+playwright-report
+test-results
