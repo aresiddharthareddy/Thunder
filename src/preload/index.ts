@@ -57,6 +57,10 @@ const api = {
     tree: (workspaceRoot: string): Promise<string[]> => ipcRenderer.invoke(CH.FILE_TREE, { workspaceRoot }) as Promise<string[]>,
     write: (payload: { filePath: string; workspaceRoot: string; content: string }): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.FILE_WRITE, payload) as Promise<{ ok: boolean }>,
   },
+  chat: {
+    createSession: (payload: { mode: Mode; title?: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_SESSION_CREATE, payload) as Promise<{ id: string }>,
+    append: (payload: { sessionId: string; role: "user" | "assistant" | "system" | "tool"; content: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_MESSAGE_APPEND, payload) as Promise<{ id: string }>,
+  },
 };
 
 contextBridge.exposeInMainWorld("thunder", api);
