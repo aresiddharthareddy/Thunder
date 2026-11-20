@@ -5,6 +5,7 @@ import type { DiagnosticReport } from "../shared/diagnostics.js";
 import type { TierCapabilities } from "../core/hardware.js";
 import type { CatalogModel, DownloadProgress, Mode } from "../shared/types.js";
 import type { CompletionResult } from "../core/inference.js";
+import type { AgentPlanStep, AgentRunResult } from "../core/agent.js";
 
 const api = {
   hardware: {
@@ -40,6 +41,9 @@ const api = {
     streamCancel: (streamKey: string): Promise<{ aborted: boolean }> => ipcRenderer.invoke(CH.INFER_STREAM_CANCEL, streamKey) as Promise<{ aborted: boolean }>,
     onToken: (callback: (payload: { streamKey: string; text: string }) => void): (() => void) => { const handler = (_event: Electron.IpcRendererEvent, payload: { streamKey: string; text: string }) => callback(payload); ipcRenderer.on(CH.INFER_STREAM_TOKEN, handler); return () => ipcRenderer.removeListener(CH.INFER_STREAM_TOKEN, handler); },
     onEnd: (callback: (payload: { streamKey: string; result: CompletionResult; error?: string }) => void): (() => void) => { const handler = (_event: Electron.IpcRendererEvent, payload: { streamKey: string; result: CompletionResult; error?: string }) => callback(payload); ipcRenderer.on(CH.INFER_STREAM_END, handler); return () => ipcRenderer.removeListener(CH.INFER_STREAM_END, handler); },
+  },
+  agent: {
+    run: (payload: { plan: AgentPlanStep[]; workspaceRoot: string; allowWrites: boolean }): Promise<AgentRunResult> => ipcRenderer.invoke(CH.AGENT_RUN, payload) as Promise<AgentRunResult>,
   },
   security: {
     classifyPath: (payload: { targetPath: string; intent: "read" | "write"; workspaceRoot: string }) => ipcRenderer.invoke(CH.SECURITY_CLASSIFY_PATH, payload),
