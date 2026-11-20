@@ -9,6 +9,7 @@ export interface AgentPolicy {
   maxFiles: number;
   timeoutMs: number;
   allowWrites: boolean;
+  maxReadBytes?: number;
 }
 
 export interface AgentPlanStep { kind: AgentStepKind; payload: unknown; }
@@ -61,7 +62,9 @@ export async function runAgent(plan: AgentPlanStep[], policy: AgentPolicy, signa
       const item = plan[index]; const stepStarted = Date.now();
       if (item.kind === "read") {
         const file = safePath(policy.workspaceRoot, String((item.payload as { file: string }).file));
-        await fs.readFile(file, "utf8"); finish(index, item.kind, item.payload, "ok", stepStarted); continue;
+        const stat = await fs.stat(file); const maxReadBytes = policy.maxReadBytes ?? 1_048_576;
+        if (stat.size > maxReadBytes) throw new Error(`Read exceeds ${maxReadBytes} bytes: ${(item.payload as { file: string }).file}`);
+        const content = await fs.readFile(file, "utf8"); finish(index, item.kind, { ...(item.payload as object), content }, "ok", stepStarted); continue;
       }
       if (item.kind === "search_replace") {
         if (!policy.allowWrites) throw new Error("Agent writes are disabled by policy");

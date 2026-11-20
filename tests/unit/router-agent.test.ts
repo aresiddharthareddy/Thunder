@@ -30,6 +30,13 @@ describe("agent execution", () => {
     expect(await fs.readFile(path.join(root, "demo.ts"), "utf8")).toContain("42");
   });
 
+  it("returns bounded file content from read steps", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
+    await fs.writeFile(path.join(root, "context.ts"), "export const value = 7;\n");
+    const result = await runAgent([{ kind: "read", payload: { file: "context.ts" } }], { workspaceRoot: root, maxSteps: 2, maxFiles: 1, timeoutMs: 1000, maxReadBytes: 100, allowWrites: false });
+    expect(result.steps[0]?.payload).toMatchObject({ file: "context.ts", content: "export const value = 7;\n" });
+  });
+
   it("rejects paths outside the workspace", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "thunder-agent-"));
     const result = await runAgent([{ kind: "read", payload: { file: "../secret" } }], { workspaceRoot: root, maxSteps: 3, maxFiles: 1, timeoutMs: 1000, allowWrites: false });
