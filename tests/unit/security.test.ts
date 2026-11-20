@@ -24,6 +24,11 @@ describe("security policy", () => {
     const result = await redactSecrets("const token = ghp_123456789012345678901234567890123456;");
     expect(result.text).toBe("const token = [REDACTED];");
   });
+  it("redacts generic credential assignments while keeping names", async () => {
+    const result = await redactSecrets("password=super-secret-value api_key: 'abcdefghijk'");
+    expect(result.count).toBe(2);
+    expect(result.text).toBe("password=[REDACTED] api_key:[REDACTED]");
+  });
   it("requires approval for every terminal command in v1", () => { expect(requiresTerminalApproval("echo hello")).toBe(true); });
   it("blocks outbound operations only when enabled", () => {
     setZeroOutbound(true);
