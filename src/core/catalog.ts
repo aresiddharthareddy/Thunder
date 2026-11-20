@@ -14,13 +14,13 @@ export function defaultModelsDir(): string { return path.join(app.getPath("userD
 export function readBundledCatalog(): Catalog { return CatalogSchema.parse(JSON.parse(fs.readFileSync(bundledPath(), "utf8"))) as Catalog; }
 const CATALOG_URL = "https://thunder-models.pages.dev/models.json";
 export function mergeCatalog(bundled: Catalog, remote: Catalog): Catalog {
-  const bundledById = new Map(bundled.models.map((model) => [model.id, model]));
-  const models = remote.models.map((candidate): CatalogModel | null => {
-    const pinned = bundledById.get(candidate.id);
-    if (!pinned) return null;
-    return { ...candidate, repo: pinned.repo, file: pinned.file, revision: pinned.revision, sizeBytes: pinned.sizeBytes, sha256: pinned.sha256 } as CatalogModel;
-  }).filter((model): model is CatalogModel => model !== null);
-  return models.length > 0 ? { schemaVersion: bundled.schemaVersion, models } : bundled;
+  const remoteById = new Map(remote.models.map((model) => [model.id, model]));
+  const models = bundled.models.map((pinned) => {
+    const candidate = remoteById.get(pinned.id);
+    if (!candidate) return pinned;
+    return { ...pinned, displayName: candidate.displayName, quant: candidate.quant, license: candidate.license, contextLength: candidate.contextLength, tier: candidate.tier, roles: candidate.roles };
+  });
+  return { schemaVersion: bundled.schemaVersion, models };
 }
 export async function loadCatalog(fetchImpl: typeof fetch = fetch): Promise<Catalog> {
   const bundled = readBundledCatalog();

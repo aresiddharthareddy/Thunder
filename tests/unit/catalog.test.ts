@@ -21,5 +21,6 @@ describe("bundled model catalog", () => {
     expect(merged.models[0]?.displayName).toBe("Remote label");
     expect(merged.models[0]?.repo).toBe(first.repo);
     expect(merged.models[0]?.sha256).toBe(first.sha256);
+    expect(merged.models).toHaveLength(bundled.models.length);
   });
 });
