@@ -14,11 +14,16 @@ import { runAgent } from "../../core/agent.js";
 import { classifyPath, redactSecrets } from "../../core/security.js";
 import { db } from "../db/index.js";
 const active = new Map<string, StreamHandle>();
+async function installedModels(): Promise<ReturnType<typeof readBundledCatalog>["models"]> {
+  const catalog = readBundledCatalog();
+  return (await Promise.all(catalog.models.map(async (model) => {
+    try { await fs.access(path.join(defaultModelsDir(), `${model.id}.gguf`)); return model; } catch { return null; }
+  }))).filter((model): model is typeof catalog.models[number] => model !== null);
+}
 export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_ROUTE, async (_event, payload: { input: string; mode?: "ask" | "plan" | "agent" }) => {
     const hardware = await detectHardware();
-    const catalog = readBundledCatalog();
-    const available = (await Promise.all(catalog.models.map(async (model) => { try { await fs.access(path.join(defaultModelsDir(), `${model.id}.gguf`)); return model; } catch { return null; } }))).filter((model): model is typeof catalog.models[number] => model !== null);
+    const available = await installedModels();
     return chooseModel(payload.input, hardware.tier, available, payload.mode);
   });
   ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
@@ -27,6 +32,11 @@ export function registerInferenceIpc(): void {
     const hardware = await detectHardware();
     const requestedMode = route(payload.input, hardware.tier, payload.mode);
     const mode = capabilitiesFor(hardware.tier).modes.includes(requestedMode) ? requestedMode : "ask";
+    const available = await installedModels();
+    const selected = available.find((model) => model.id === payload.modelId);
+    if (!selected || selected.tier > hardware.tier || (!selected.roles.includes(mode) && !selected.roles.includes("router"))) {
+      throw new Error(`Model ${payload.modelId} is not installed or is incompatible with tier ${hardware.tier} and mode ${mode}`);
+    }
     const systemPrompt = mode === "agent" ? AGENT_SYSTEM_PROMPT : mode === "plan" ? PLAN_SYSTEM_PROMPT : ASK_SYSTEM_PROMPT;
     const streamKey = crypto.randomUUID(); const sender = event.sender;
     const emitEnd = (result: CompletionResult, error?: string) => { if (!sender.isDestroyed()) sender.send(CH.INFER_STREAM_END, { streamKey, result, error }); active.delete(streamKey); };
