@@ -12,6 +12,7 @@ import path from "node:path";
 import type { CompletionResult } from "../../core/inference.js";
 import { runAgent } from "../../core/agent.js";
 import { classifyPath } from "../../core/security.js";
+import { db } from "../db/index.js";
 const active = new Map<string, StreamHandle>();
 export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_ROUTE, async (_event, payload: { input: string; mode?: "ask" | "plan" | "agent" }) => {
@@ -38,6 +39,8 @@ export function registerInferenceIpc(): void {
       const decision = classifyPath(file, "write", { workspaceRoot: payload.workspaceRoot });
       if (decision.action !== "allow") throw new Error(`Agent write blocked: ${decision.reason}`);
     }
-    return runAgent(payload.plan, { workspaceRoot: payload.workspaceRoot, maxSteps: 32, maxFiles: 8, timeoutMs: 300_000, allowWrites: payload.allowWrites });
+    const result = await runAgent(payload.plan, { workspaceRoot: payload.workspaceRoot, maxSteps: 32, maxFiles: 8, timeoutMs: 300_000, allowWrites: payload.allowWrites });
+    db.prepare("INSERT INTO audit_log (ts, event, detail_json) VALUES (?, ?, ?)").run(Date.now(), "agent.run", JSON.stringify({ taskId: result.taskId, status: result.status, changedFiles: result.changedFiles, error: result.error ?? null }));
+    return result;
   });
 }
