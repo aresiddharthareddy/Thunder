@@ -6,7 +6,9 @@ import { AGENT_SYSTEM_PROMPT, ASK_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT } from "../.
 import { route } from "../../core/router.js";
 import { chooseModel } from "../../core/router.js";
 import { detectHardware } from "../../core/hardware.js";
-import { readBundledCatalog } from "../../core/catalog.js";
+import { defaultModelsDir, readBundledCatalog } from "../../core/catalog.js";
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { CompletionResult } from "../../core/inference.js";
 import { runAgent } from "../../core/agent.js";
 import { classifyPath } from "../../core/security.js";
@@ -14,7 +16,9 @@ const active = new Map<string, StreamHandle>();
 export function registerInferenceIpc(): void {
   ipcMain.handle(CH.INFER_ROUTE, async (_event, payload: { input: string; mode?: "ask" | "plan" | "agent" }) => {
     const hardware = await detectHardware();
-    return chooseModel(payload.input, hardware.tier, readBundledCatalog().models, payload.mode);
+    const catalog = readBundledCatalog();
+    const available = (await Promise.all(catalog.models.map(async (model) => { try { await fs.access(path.join(defaultModelsDir(), `${model.id}.gguf`)); return model; } catch { return null; } }))).filter((model): model is typeof catalog.models[number] => model !== null);
+    return chooseModel(payload.input, hardware.tier, available, payload.mode);
   });
   ipcMain.handle(CH.INFER_LOAD, async (_event, modelId: string) => { await loadModel(modelId); return { ok: true }; });
   ipcMain.handle(CH.INFER_STREAM_START, (event, payload: { input: string; modelId: string; mode?: "ask" | "plan" | "agent"; context?: string }) => {
