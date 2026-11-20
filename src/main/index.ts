@@ -26,8 +26,24 @@ function createWindow(): void {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
+  });
+
+  // Thunder is a local app. Renderer content must remain the bundled UI;
+  // external links should be opened by the user's browser explicitly.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      void (async () => {
+        const { shell } = await import("electron");
+        await shell.openExternal(url);
+      })();
+    }
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    const allowed = process.env.VITE_DEV_SERVER_URL;
+    if (!allowed || !url.startsWith(allowed)) event.preventDefault();
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {
