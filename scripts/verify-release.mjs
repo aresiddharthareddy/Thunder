@@ -7,6 +7,8 @@ const entries = (await fs.readdir(releaseDir).catch(() => []));
 const files = [];
 for (const entry of entries) { const stat = await fs.stat(path.join(releaseDir, entry)); if (stat.isFile() && entry !== "SHA256SUMS.txt") files.push(entry); }
 if (files.length === 0) throw new Error("No release artifacts found. Run pnpm package first.");
+const forbidden = files.filter((file) => /(^|\.)(env|pem|key)$|private|secret|credential/i.test(file));
+if (forbidden.length > 0) throw new Error(`Forbidden secret-like release files: ${forbidden.join(", ")}`);
 const checksums = [];
 for (const file of files) {
   const full = path.join(releaseDir, file);
