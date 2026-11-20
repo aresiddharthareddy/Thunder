@@ -71,7 +71,7 @@ const api = {
     openWorkspace: (): Promise<{ workspaceRoot: string; files: string[] } | null> => ipcRenderer.invoke(CH.FILE_OPEN_WORKSPACE) as Promise<{ workspaceRoot: string; files: string[] } | null>,
     read: (payload: { filePath: string; workspaceRoot: string }): Promise<string> => ipcRenderer.invoke(CH.FILE_READ, payload) as Promise<string>,
     tree: (workspaceRoot: string): Promise<string[]> => ipcRenderer.invoke(CH.FILE_TREE, { workspaceRoot }) as Promise<string[]>,
-    write: (payload: { filePath: string; workspaceRoot: string; content: string }): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.FILE_WRITE, payload) as Promise<{ ok: boolean }>,
+    write: (payload: { filePath: string; workspaceRoot: string; content: string; confirmed?: boolean }): Promise<{ ok: boolean }> => ipcRenderer.invoke(CH.FILE_WRITE, payload) as Promise<{ ok: boolean }>,
   },
   chat: {
     createSession: (payload: { mode: Mode; title?: string }): Promise<{ id: string }> => ipcRenderer.invoke(CH.CHAT_SESSION_CREATE, payload) as Promise<{ id: string }>,
