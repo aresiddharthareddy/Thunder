@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { verifyFile } from '../ide/extension/models.mjs';
 import auto from '../ide/extension/auto.cjs';
+import { prepareCpuRuntime } from './build-cpu-runtime.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const build=path.join(root,'.thunder-build');
@@ -25,27 +26,10 @@ const ext=path.join(resources,'extensions','thunder-local');
 try {
   await fs.mkdir(app,{recursive:true});
   execFileSync('rsync',['-a',`${base}/`,`${app}/`]);
-  const frameworks=path.join(app,'Contents','Frameworks');
-  for (const entry of await fs.readdir(frameworks)) {
-    if (!entry.startsWith('VSCodium Helper')) continue;
-    const suffix=entry.slice('VSCodium Helper'.length);
-    const oldBundle=path.join(frameworks,entry);
-    const newName='Thunder Workbench Helper'+suffix;
-    const newBundle=path.join(frameworks,newName);
-    await fs.rename(oldBundle,newBundle);
-    const executableSuffix=suffix.replace(/\.app$/,'');
-    const oldExecutable='VSCodium Helper'+executableSuffix;
-    const newExecutable='Thunder Workbench Helper'+executableSuffix;
-    const oldBinary=path.join(newBundle,'Contents','MacOS',oldExecutable);
-    const newBinary=path.join(newBundle,'Contents','MacOS',newExecutable);
-    await fs.rename(oldBinary,newBinary);
-    const helperInfo=path.join(newBundle,'Contents','Info.plist');
-    execFileSync('plutil',['-replace','CFBundleName','-string',newName,helperInfo]);
-    execFileSync('plutil',['-insert','CFBundleExecutable','-string',newExecutable,helperInfo]);
-  }
   await fs.mkdir(ext,{recursive:true});
-  for(const name of ['package.json','extension.cjs','panel.cjs','context.cjs','services.cjs','changes.cjs','auto.cjs','models.mjs','engine.mjs','bolt.svg','node_modules'])
+  for(const name of ['package.json','extension.cjs','panel.cjs','context.cjs','services.cjs','changes.cjs','auto.cjs','models.mjs','engine.mjs','cpu.mjs','bolt.svg','node_modules'])
     await fs.cp(path.join(src,name),path.join(ext,name),{recursive:true,verbatimSymlinks:true});
+  await prepareCpuRuntime(root,path.join(ext,'runtime'));
   await fs.copyFile(path.join(root,'resources/models.json'),path.join(ext,'catalog.json'));
   await fs.mkdir(path.join(ext,'models'));
   for(const model of [starter,...(hasNano?[auto.nano]:[])])
@@ -55,10 +39,18 @@ try {
   const productFile=path.join(resources,'product.json');
   const product=JSON.parse(await fs.readFile(productFile));
   Object.assign(product,{nameShort:'Thunder Workbench',nameLong:'Thunder Workbench',applicationName:'thunder-workbench',dataFolderName:'.thunder-workbench',urlProtocol:'thunder-workbench'});
-  for(const key of ['defaultChatAgent','updateUrl','extensionsGallery','builtInExtensionsEnabledWithAutoUpdates']) delete product[key];
+  // VSCodium uses these IDs during renderer initialization even with its AI UI disabled.
+  if (!product.defaultChatAgent?.chatExtensionId) throw new Error('The VSCodium base lacks required chat metadata.');
+  for (const key of Object.keys(product.defaultChatAgent)) {
+    if (key.endsWith('Url')) delete product.defaultChatAgent[key];
+  }
+  product.builtInExtensionsEnabledWithAutoUpdates = [];
+  product.enableTelemetry = false;
+  for(const key of ['updateUrl','extensionsGallery']) delete product[key];
   await fs.writeFile(productFile,JSON.stringify(product,null,2));
   const info=path.join(app,'Contents','Info.plist');
-  for(const [key,value] of Object.entries({CFBundleDisplayName:'Thunder Workbench',CFBundleName:'Thunder Workbench',CFBundleIdentifier:'dev.thunder.workbench',CFBundleExecutable:'VSCodium'}))
+  // Keep the upstream internal name and helper paths paired for Electron's child process lookup.
+  for(const [key,value] of Object.entries({CFBundleDisplayName:'Thunder Workbench',CFBundleIdentifier:'dev.thunder.workbench'}))
     execFileSync('plutil',['-replace',key,'-string',value,info]);
   execFileSync('xattr',['-cr',app]);
   execFileSync('codesign',['--force','--deep','--sign','-',app],{stdio:'inherit'});
@@ -66,7 +58,6 @@ try {
   const backup=path.join(temp,'previous.app');
   if(previous) await fs.rename(out,backup);
   try { await fs.rename(app,out); } catch(e) { if(previous) await fs.rename(backup,out);throw e; }
-  if(previous) console.log('Previous build retained at',backup);
-  else await fs.rm(temp,{recursive:true,force:true});
+  await fs.rm(temp,{recursive:true,force:true});
   console.log(out);
 } catch(e){ console.error('Staged bundle:',temp);throw e; }

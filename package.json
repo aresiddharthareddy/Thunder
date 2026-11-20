@@ -24,6 +24,7 @@
     "provision:demo": "node scripts/provision-demo.mjs",
     "build:workbench": "node scripts/build-thunder-app.mjs --demo",
     "verify:workbench": "node scripts/verify-workbench.mjs",
+    "smoke:workbench-agent": "node scripts/smoke-workbench-agent.mjs",
     "demo": "node scripts/run-workbench.mjs"
   },
   "dependencies": {

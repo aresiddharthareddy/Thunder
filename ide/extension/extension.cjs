@@ -82,8 +82,9 @@ class Assistant {
     if(!['ask','plan','agent','cloud'].includes(mode)) throw new Error('Choose a supported mode.');
     if(this.pending) throw new Error('Apply or discard the staged edits first.');
     const controller=this.run=new AbortController();
-    const signal=controller.signal;
     const s=this.services;
+    const deadline=mode==='cloud'?null:AbortSignal.timeout(s.hw.tier===1?60_000:120_000);
+    const signal=deadline?AbortSignal.any([controller.signal,deadline]):controller.signal;
     this.post({type:'start',text}); this.status();
     let answer='';
     try {
@@ -92,7 +93,9 @@ class Assistant {
       } else if (/\b(who are you|what (?:ai |language )?model (?:are you|is this)|(?:your|underlying|actual|real) (?:model|identity)|what are you powered by)\b/i.test(text)) {
         answer='I’m Thunder Agent, your local coding assistant.';
       } else {
+        this.post({type:'phase',text:'Finding relevant workspace files…'});
         const sources=await collect(text);
+        signal.throwIfAborted();
         if(mode==='agent' && !sources.size) throw new Error('Open a trusted workspace folder and a source file to propose an edit.');
         const files=[...sources].map(([file,src])=>'File: '+file+'\n'+src.before.slice(0,7500)).join('\n\n');
         const route=routes(await s.models(),s.hw,mode,text,s.pro && s.state.get('pins',{})[mode]);
@@ -100,8 +103,14 @@ class Assistant {
         let notes=this.history.slice(-4).join('\n').slice(-1100);
         const infer=async (model,phase,input,maxTokens,onText)=>{
           signal.throwIfAborted();
-          const result=await this.engine.run({mode:phase,input,context:files,history:notes,model,file:model.location,signal,maxTokens,tuning:s.tuning,onText});
-          if(result.elapsedMs>0) await s.state.update('rate:'+model.id,Math.round(result.usedOutputTokens*1000/result.elapsedMs)+' tokens/s last run');
+          const result=await this.engine.run({
+            mode:phase,input,context:files,history:notes,model,file:model.location,signal,maxTokens,tuning:s.tuning,onText,
+            onBackend:backend=>this.post({type:'phase',text:backend==='cpu-defaults'?'Running on CPU with default decoding…':'Running on CPU…'})
+          });
+          signal.throwIfAborted();
+          if(result.elapsedMs>0 && result.usedOutputTokens>0) {
+            await s.state.update('rate:'+model.id,Math.round(result.usedOutputTokens*1000/result.elapsedMs)+' tokens/s last run');
+          }
           return result.text;
         };
         if(route.length>1) {
@@ -114,6 +123,7 @@ class Assistant {
           let request=text;
           for(let i=0;i<2;i++) {
             const proposal=await infer(selected,mode,request,900);
+            signal.throwIfAborted();
             try { this.pending=stage(proposal,sources,s.hw.files); break; }
             catch(e) {
               if(i===1) throw new Error('Could not stage a valid edit. '+e.message);
@@ -128,7 +138,11 @@ class Assistant {
       }
       this.history.push(redact(text),redact(answer)); this.history=this.history.slice(-4); await this.saveHistory();
       this.post({type:'end',text:answer});
-    } catch(e) { this.post({type:'end',text:signal.aborted?'Cancelled.':e.message}); }
+    } catch(e) {
+      const response=controller.signal.aborted?'Cancelled.':deadline?.aborted||e.name==='TimeoutError'
+        ?'Local inference timed out. Try a smaller edit or run Thunder Doctor.':e.message;
+      this.post({type:'end',text:response});
+    }
     finally { this.run=null; this.status(); }
   }
   async preview(file) {
@@ -142,19 +156,26 @@ class Assistant {
     const batch=this.pending?.batches[0];
     if(!batch || !vscode.workspace.isTrusted) throw new Error('A reviewed edit in a trusted workspace is required.');
     const edit=new vscode.WorkspaceEdit();
+    const saveCandidates=[];
     for(const c of batch) {
       const folder=vscode.workspace.getWorkspaceFolder(c.uri);
       if(!folder || await fs.realpath(c.uri.fsPath)!==path.join(await fs.realpath(folder.uri.fsPath),c.file)) throw new Error('The workspace path changed. Discard and regenerate the edit.');
       const doc=await vscode.workspace.openTextDocument(c.uri);
       if(doc.version!==c.version || doc.getText()!==c.before) throw new Error('File changed after review. Discard and regenerate the edit.');
       edit.replace(c.uri,new vscode.Range(doc.positionAt(0),doc.positionAt(c.before.length)),c.after);
+      if(!doc.isDirty) saveCandidates.push({doc,after:c.after});
     }
     if(!await vscode.workspace.applyEdit(edit)) throw new Error('The workbench declined the edit.');
     this.pending.batches.shift();
+    let saved=0;
+    for(const {doc,after} of saveCandidates) {
+      if(doc.getText()===after && await doc.save().catch(()=>false)) saved++;
+    }
     if(this.pending.batches.length) await this.preview(this.pending.batches[0][0].file);
     else this.clearReview();
-    this.notice('Applied to '+batch.map(c=>c.file).join(', ')+'. Save or undo in the editor.');
-    await this.services.audit('agent.apply',{count:batch.length});
+    const detail=saved===batch.length?'Saved to disk.':`Saved ${saved} of ${batch.length}. Remaining changes are in the editor.`;
+    this.notice('Applied to '+batch.map(c=>c.file).join(', ')+'. '+detail);
+    await this.services.audit('agent.apply',{count:batch.length,saved});
   }
 }
 let assistant;
