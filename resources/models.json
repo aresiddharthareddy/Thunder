@@ -2,6 +2,20 @@
   "schemaVersion": 1,
   "models": [
     {
+      "id": "qwen2.5-coder-0.5b-q4",
+      "displayName": "Qwen2.5 Coder 0.5B Nano (Q4_K_M)",
+      "repo": "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+      "file": "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "quant": "Q4_K_M",
+      "revision": "ebb2015119c907b064c512bf053e945850b5875f",
+      "sizeBytes": 491400064,
+      "sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32",
+      "license": "Apache-2.0",
+      "contextLength": 32768,
+      "tier": 1,
+      "roles": ["router", "ask", "agent", "autocomplete"]
+    },
+    {
       "id": "qwen2.5-coder-1.5b-q4",
       "displayName": "Qwen2.5 Coder 1.5B (Q4_K_M)",
       "repo": "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",

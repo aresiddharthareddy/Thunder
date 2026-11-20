@@ -71,6 +71,7 @@ function App(): JSX.Element {
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [zeroOutbound, setZeroOutbound] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [autoPreparing, setAutoPreparing] = useState(false);
 
   async function refreshCatalog(): Promise<void> {
     setCatalogLoading(true);
@@ -98,6 +99,15 @@ function App(): JSX.Element {
     catch (reason) { setError(reason instanceof Error ? reason.message : "Model download failed"); }
   }
   async function toggleDownload(modelId: string, downloading: boolean): Promise<void> { if (!downloading) { await download(modelId); return; } await window.thunder.catalog.downloadCancel(modelId); setProgress((current) => ({ ...current, [modelId]: { ...(current[modelId] ?? { modelId, downloadedBytes: 0, totalBytes: 0 }), phase: "error", error: "Paused" } })); }
+  async function prepareAutoPack(): Promise<void> {
+    if (autoPreparing || !hardware || zeroOutbound) { if (zeroOutbound) setError("Turn off Zero Outbound to prepare the local Auto pack."); return; }
+    const free = entitlement?.tier !== "pro";
+    const candidates = models.filter((model) => !model.downloaded && (model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2)) && ["Apache-2.0", "MIT"].includes(model.license) && (!free || model.sizeBytes <= 2_000_000_000));
+    if (!candidates.length) return;
+    setAutoPreparing(true);
+    try { for (const model of candidates) await download(model.id); }
+    finally { setAutoPreparing(false); }
+  }
 
   async function saveDiagnostics(): Promise<void> {
     setSaving(true);
@@ -134,8 +144,9 @@ function App(): JSX.Element {
         <ProPreview entitlement={entitlement} />
         <section className="card model-card">
           <div className="card-heading"><div><p className="eyebrow">M2 · LOCAL MODELS</p><h2>Model catalog</h2></div><span className="model-count">{models.length} available</span></div>
-          <p className="reason">Download a model locally when you are ready. Downloads are verified with SHA-256 before activation.</p>
-          <div className="model-list">{catalogLoading && <p className="reason">Loading verified catalog…</p>}{!catalogLoading && models.length === 0 && <button type="button" onClick={() => void refreshCatalog()}>Retry catalog</button>}{models.filter((model) => !hardware || model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2)).map((model) => { const update = progress[model.id]; const percent = update?.totalBytes ? Math.floor(update.downloadedBytes / update.totalBytes * 100) : 0; const restricted = !["Apache-2.0", "MIT"].includes(model.license) && entitlement?.tier !== "pro"; const downloading = update?.phase === "downloading"; return <div className="model-row" key={model.id}><div><strong>{model.displayName}</strong><span>{(model.sizeBytes / 1024 ** 3).toFixed(1)} GB · {model.license}</span>{update && <div className="progress"><i style={{ width: `${percent}%` }} /></div>}</div><button type="button" disabled={restricted || model.downloaded || update?.phase === "verifying"} onClick={() => void toggleDownload(model.id, downloading)}>{restricted ? "Pro only" : model.downloaded ? "Downloaded" : downloading ? "Pause" : update?.phase === "error" ? "Resume" : update ? `${update.phase} ${percent}%` : "Download"}</button></div>; })}</div>
+          <p className="reason">{entitlement?.tier === "pro" ? "Model Lab lets Pro users choose and pin compatible models." : "Free uses the hardware-matched Auto pack. Individual model picking stays locked; downloads are verified with SHA-256 before activation."}</p>
+          {entitlement?.tier !== "pro" && <button type="button" onClick={() => void prepareAutoPack()} disabled={autoPreparing || zeroOutbound || catalogLoading}>{autoPreparing ? "Preparing Auto pack…" : zeroOutbound ? "Turn off Zero Outbound to prepare" : "Prepare Free Auto pack"}</button>}
+          <div className="model-list">{catalogLoading && <p className="reason">Loading verified catalog…</p>}{!catalogLoading && models.length === 0 && <button type="button" onClick={() => void refreshCatalog()}>Retry catalog</button>}{models.filter((model) => !hardware || model.tier <= hardware.tier || (hardware.tier === 2.5 && model.tier <= 2)).map((model) => { const update = progress[model.id]; const percent = update?.totalBytes ? Math.floor(update.downloadedBytes / update.totalBytes * 100) : 0; const freeLocked = entitlement?.tier !== "pro" && model.sizeBytes > 2_000_000_000; const restricted = (!['Apache-2.0', 'MIT'].includes(model.license) && entitlement?.tier !== 'pro') || freeLocked; const downloading = update?.phase === 'downloading'; return <div className="model-row" key={model.id}><div><strong>{model.displayName}</strong><span>{(model.sizeBytes / 1024 ** 3).toFixed(1)} GB · {model.license}</span>{update && <div className="progress"><i style={{ width: `${percent}%` }} /></div>}</div><button type="button" disabled={restricted || model.downloaded || update?.phase === 'verifying'} onClick={() => void toggleDownload(model.id, downloading)}>{restricted ? (entitlement?.tier === 'pro' ? 'Pro only' : 'Auto only') : model.downloaded ? 'Downloaded' : downloading ? 'Pause' : update?.phase === 'error' ? 'Resume' : update ? `${update.phase} ${percent}%` : 'Download'}</button></div>; })}</div>
         </section>
         <section className="doctor-row">
           <div><p className="eyebrow">DEVELOPER TOOLS</p><h3>Thunder Doctor</h3><p>Collect a local diagnostic report for troubleshooting. Nothing is uploaded.</p></div>

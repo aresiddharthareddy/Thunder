@@ -22,7 +22,7 @@ async function inventory(extension, directory, allowed) {
   let catalogPath=path.join(extension,'catalog.json');
   if (!await fs.stat(catalogPath).catch(()=>null)) catalogPath=path.resolve(extension,'../../resources/models.json');
   const manifest = JSON.parse(await fs.readFile(catalogPath, 'utf8'));
-  const catalog = [nano, ...manifest.models].filter(m => ['MIT','Apache-2.0'].includes(m.license));
+  const catalog = [...new Map([nano, ...manifest.models].map(m => [m.id, m])).values()].filter(m => ['MIT','Apache-2.0'].includes(m.license));
   const result = [];
   for (const model of catalog) {
     if (allowed && !allowed.includes(model.id)) continue;
